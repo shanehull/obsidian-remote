@@ -1,0 +1,22 @@
+services:
+  obsidian:
+    build: .
+    container_name: obsidian
+    shm_size: "1gb"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - TEST_MODE=${TEST_MODE:-true}
+      - PASSWORD=${VNC_PASSWORD}
+      - GIT_REPO_URL=${GIT_REPO_URL}
+      - SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
+      - OBSIDIAN_API_KEY=${OBSIDIAN_API_KEY}
+    volumes:
+      - ./config:/config
+      - ./vaults:/vaults
+    ports:
+      - 3000:3000 # Web UI (KasmVNC)
+      - 4000:4000 # MCP SSE Bridge (Bridge for AI agents)
+      - 27123:27123 # Local REST API (Internal usage)
+    restart: unless-stopped

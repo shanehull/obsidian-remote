@@ -1,0 +1,10 @@
+# Local container data
+config/
+vaults/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Env file
+.env
