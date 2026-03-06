@@ -12,6 +12,8 @@ services:
       - GIT_REPO_URL=${GIT_REPO_URL}
       - GITHUB_PAT=${GITHUB_PAT}
       - OBSIDIAN_API_KEY=${OBSIDIAN_API_KEY}
+      - MCP_AUTH_MODE=${MCP_AUTH_MODE:-}
+      - MCP_AUTH_SECRET_KEY=${MCP_AUTH_SECRET_KEY:-}
     volumes:
       - ./config:/config
     ports:

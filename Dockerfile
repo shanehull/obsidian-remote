@@ -32,7 +32,9 @@ export MCP_ALLOWED_ORIGINS=\"*\"\n\
 export OBSIDIAN_BASE_URL=https://localhost:27123\n\
 export OBSIDIAN_VERIFY_SSL=false\n\
 export NODE_ENV=production\n\
-# Ensure logs directory exists\n\
+# Add MCP Authentication\n\
+export MCP_AUTH_MODE=\${MCP_AUTH_MODE:-}\n\
+export MCP_AUTH_SECRET_KEY=\${MCP_AUTH_SECRET_KEY:-}\n\
 mkdir -p /usr/lib/node_modules/obsidian-mcp-server/logs\n\
 chown -R abc:abc /usr/lib/node_modules/obsidian-mcp-server\n\
 cd /usr/lib/node_modules/obsidian-mcp-server\n\

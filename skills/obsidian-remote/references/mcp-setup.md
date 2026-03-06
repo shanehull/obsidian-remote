@@ -2,36 +2,42 @@
 
 This reference provides configuration examples for connecting popular MCP clients to your Obsidian Remote server.
 
+> [!CAUTION]
+> Ensure your server is secured with `MCP_AUTH_MODE=jwt`. Clients must provide an `Authorization` header with a valid JWT.
+
 ## Configure MCP Client
 
-Replace `<server-url>` with your server's endpoint (e.g., `https://obsidian.yourdomain.com/mcp` or `http://<ip>:4000/mcp`).
+Replace `<server-url>` with your server's endpoint. Use an environment variable (e.g., `$OBSIDIAN_REMOTE_JWT`) for your token.
 
 ### Gemini CLI
 **Config File:** `~/.gemini/settings.json`
-
 ```json
 {
   "mcpServers": {
     "obsidian-remote": {
-      "url": "<server-url>"
+      "url": "<server-url>",
+      "headers": {
+        "Authorization": "Bearer $OBSIDIAN_REMOTE_JWT"
+      }
     }
   }
 }
 ```
-
 **CLI Alternative:**
 ```bash
-gemini mcp add obsidian-remote --transport http <server-url>
+gemini mcp add obsidian-remote --transport http <server-url> --header "Authorization: Bearer $OBSIDIAN_REMOTE_JWT"
 ```
 
 ### Cursor
 **Config File:** `~/.cursor/mcp.json`
-
 ```json
 {
   "mcpServers": {
     "obsidian-remote": {
-      "url": "<server-url>"
+      "url": "<server-url>",
+      "headers": {
+        "Authorization": "Bearer $OBSIDIAN_REMOTE_JWT"
+      }
     }
   }
 }
@@ -39,36 +45,37 @@ gemini mcp add obsidian-remote --transport http <server-url>
 
 ### Amp (Sourcegraph)
 **Config File:** `~/.config/agents/skills/obsidian-remote/mcp.json`
-
 ```json
 {
   "obsidian-remote": {
-    "url": "<server-url>"
+    "url": "<server-url>",
+    "headers": {
+      "Authorization": "Bearer $OBSIDIAN_REMOTE_JWT"
+    }
   }
 }
 ```
-
 **CLI Alternative:**
 ```bash
-amp mcp add obsidian-remote --transport http <server-url>
+amp mcp add obsidian-remote --transport http <server-url> --header "Authorization: Bearer $OBSIDIAN_REMOTE_JWT"
 ```
 
 ### Claude Desktop
 File: `~/Library/Application Support/Claude/claude_desktop_config.json`
-
 ```json
 {
   "mcpServers": {
     "obsidian-remote": {
-      "url": "<server-url>"
+      "url": "<server-url>",
+      "headers": {
+        "Authorization": "Bearer $OBSIDIAN_REMOTE_JWT"
+      }
     }
   }
 }
 ```
 
 ## Tools
-
-The following tools are available once connected:
 
 | Tool | Description |
 | :--- | :--- |
@@ -82,7 +89,6 @@ The following tools are available once connected:
 
 ## Troubleshooting
 
-- **Connection Refused:** Ensure the container is running (`docker-compose ps`) and the port is open in your firewall.
+- **401 Unauthorized:** Your `Authorization` header is missing, malformed, or the JWT is invalid/expired.
+- **Connection Refused:** Ensure the container is running and the port is open in your firewall.
 - **404 Not Found:** Verify the URL ends in `/mcp`.
-- **401 Unauthorized:** Ensure the `OBSIDIAN_API_KEY` in your `.env` matches the one generated in the Obsidian Web UI.
-- **REST API Not Active:** You must manually click **"Trust"** once in the VNC Web UI (`http://<host-ip>:3000`) for the vault to open and the plugin to start.

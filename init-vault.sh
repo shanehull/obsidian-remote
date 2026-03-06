@@ -5,8 +5,21 @@ TEST_MODE="${TEST_MODE:-true}"
 VAULT_PATH="/vaults"
 OBSIDIAN_CONFIG_DIR="/config/.config/obsidian"
 OBSIDIAN_JSON="$OBSIDIAN_CONFIG_DIR/obsidian.json"
+KEY_FILE="/config/.obsidian_api_key"
 
-# 1. Vault Logic
+# 1. API Key Automation
+# If the user didn't provide a key, generate one and persist it
+if [ -z "$OBSIDIAN_API_KEY" ]; then
+    if [ -f "$KEY_FILE" ]; then
+        OBSIDIAN_API_KEY=$(cat "$KEY_FILE")
+    else
+        OBSIDIAN_API_KEY=$(head /dev/urandom | tr -dc 'a-f0-9' | head -c 32)
+        echo "$OBSIDIAN_API_KEY" > "$KEY_FILE"
+    fi
+fi
+export OBSIDIAN_API_KEY
+
+# 2. Vault Logic
 mkdir -p "$VAULT_PATH"
 
 if [ "$TEST_MODE" = "true" ]; then
@@ -24,7 +37,7 @@ if [ "$TEST_MODE" = "true" ]; then
         echo '{"pluginEnabled": true, "community-plugin-v2": true, "nativeMenus": false, "useTitleBar": false}' > "$VAULT_PATH/.obsidian/app.json"
         echo '["obsidian-local-rest-api"]' > "$VAULT_PATH/.obsidian/community-plugins.json"
         
-        echo "**** Downloading Local REST API plugin for dummy vault... ****"
+        echo "**** Downloading Local REST API plugin... ****"
         curl -L -s -o "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/main.js" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/main.js"
         curl -L -s -o "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/manifest.json" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/manifest.json"
         echo "{\"apiKey\":\"$OBSIDIAN_API_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true}" > "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
@@ -52,10 +65,16 @@ else
             echo "**** ERROR: TEST_MODE=false but GIT_REPO_URL or GITHUB_PAT missing! ****"
         fi
     fi
-    # No automated config for real vaults - assume user has it configured in git.
+
+    # ENFORCE the API Key in the real vault every boot to keep environment in sync
+    PLUGIN_DATA="$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
+    if [ -f "$PLUGIN_DATA" ]; then
+        # Use sed to update the apiKey while preserving other settings
+        sed -i "s/\"apiKey\":\"[^\"]*\"/\"apiKey\":\"$OBSIDIAN_API_KEY\"/" "$PLUGIN_DATA"
+    fi
 fi
 
-# 2. Ensure Obsidian config reflects selected vault
+# 3. Ensure Obsidian config reflects selected vault
 mkdir -p "$OBSIDIAN_CONFIG_DIR"
 mkdir -p "/config/.config/openbox"
 
