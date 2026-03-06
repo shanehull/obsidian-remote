@@ -27,11 +27,27 @@ A fully containerized Obsidian instance with a built-in MCP server for automated
     docker exec obsidian cat /config/.obsidian_api_key
     ```
 
-## Client Configuration
+## Client Setup (Skill + MCP)
 
-Replace `<server-endpoint>` with your server's address. Use an environment variable (e.g., `$OBSIDIAN_REMOTE_JWT`) for your token.
+To use this with AI agents, you must register the **Skill** (documentation) and the **MCP Server** (connection).
 
-### Gemini CLI
+### 1. Register the Skill
+
+Install the skill documentation into your agent CLI:
+
+#### Gemini CLI
+```bash
+gemini skills install https://github.com/shanehull/obsidian-remote --path skills/obsidian-remote
+```
+
+#### Amp (Sourcegraph)
+Amp automatically discovers skills in your workspace. If you are using it globally, ensure the `obsidian-remote` directory is in your `~/.config/agents/skills/` path.
+
+### 2. Configure the MCP Server
+
+Replace `<server-endpoint>` with your server's address and `<your-jwt>` with a token signed by your `MCP_AUTH_SECRET_KEY`.
+
+#### Gemini CLI
 **Config File:** `~/.gemini/settings.json`
 ```json
 {
@@ -50,21 +66,11 @@ Replace `<server-endpoint>` with your server's address. Use an environment varia
 gemini mcp add obsidian-remote <server-endpoint> --transport http --header "Authorization: Bearer $OBSIDIAN_REMOTE_JWT"
 ```
 
-### Amp (Sourcegraph)
-**Config File:** `~/.config/agents/skills/obsidian-remote/mcp.json`
-```json
-{
-  "obsidian-remote": {
-    "url": "<server-endpoint>",
-    "headers": {
-      "Authorization": "Bearer $OBSIDIAN_REMOTE_JWT"
-    }
-  }
-}
-```
+#### Amp (Sourcegraph)
+The MCP server configuration is already included in the skill's `mcp.json`. Ensure the URL in `~/.config/agents/skills/obsidian-remote/mcp.json` points to your endpoint.
 
-### Claude Desktop
-File: `~/Library/Application Support/Claude/claude_desktop_config.json`
+#### Cursor
+Add to `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
@@ -80,9 +86,8 @@ File: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ## Architecture
 
-- **Zero-Click Startup:** Automatically handles vault cloning and plugin configuration.
-- **VNC Management:** Port 3000 (protected by `VNC_PASSWORD`).
-- **MCP Server:** Port 4000 (protected by `MCP_AUTH_SECRET_KEY`).
+- **Zero-Click Startup:** Automatically handles vault cloning, plugin configuration, and "Trusting" the vault.
+- **MCP Server:** Programmatic bridge for AI agents listening on Port 4000.
 - **Resource Optimized:** 256MB SHM for stability.
 
 ## Security
