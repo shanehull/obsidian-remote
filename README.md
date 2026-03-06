@@ -2,7 +2,57 @@
 
 A containerized Obsidian instance with a built-in MCP server for automated note management.
 
+## Quick Start
+
+You can pull the pre-built image from the GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/shanehull/obsidian-remote:latest
+```
+
+### Run with Docker Compose (Recommended)
+1.  **Configure environment:**
+    ```bash
+    cp .env.example .env
+    ```
+    Edit `.env` and set your credentials.
+
+2.  **Start the server:**
+    ```bash
+    docker-compose up -d
+    ```
+
+### Run with Docker CLI
+If you prefer not to use Compose, you can run the image directly:
+
+```bash
+docker run -d \
+  --name obsidian \
+  --shm-size="256mb" \
+  -p 3000:3000 \
+  -p 4000:4000 \
+  -p 27123:27123 \
+  -v $(pwd)/config:/config \
+  -v $(pwd)/vaults:/vaults \
+  -e TEST_MODE=true \
+  -e PASSWORD=your_vnc_password \
+  -e OBSIDIAN_API_KEY=your_api_key \
+  -e GIT_REPO_URL=git@github.com:user/repo.git \
+  -e GITHUB_PAT=your_github_pat \
+  ghcr.io/shanehull/obsidian-remote:latest
+```
+
 ## Setup
+
+### Operational Modes
+- **TEST_MODE=true (Default):** Automated "Zero-Click" seeding. The container will automatically download, enable, and configure the Local REST API plugin in an isolated dummy vault for immediate testing.
+- **TEST_MODE=false:** Production mode. The container clones your real vault from Git and assumes the Local REST API plugin is already committed and configured in your repository.
+
+### Vault Prerequisites
+When using your real vault (`TEST_MODE=false`), ensure the following are already committed to your repository:
+- **Local REST API Plugin:** Installed and enabled.
+- **Obsidian Git Plugin:** Configured for auto-sync.
+- **API Key:** Matches the `OBSIDIAN_API_KEY` in your `.env`.
 
 1.  **Configure environment:**
     ```bash

@@ -2,7 +2,7 @@ services:
   obsidian:
     build: .
     container_name: obsidian
-    shm_size: "1gb"
+    shm_size: "256mb"
     environment:
       - PUID=1000
       - PGID=1000

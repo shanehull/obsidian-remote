@@ -22,7 +22,7 @@ if [ "$TEST_MODE" = "true" ]; then
         echo '{"pluginEnabled": true, "community-plugin-v2": true, "nativeMenus": false, "useTitleBar": false}' > "$VAULT_PATH/.obsidian/app.json"
         echo '["obsidian-local-rest-api"]' > "$VAULT_PATH/.obsidian/community-plugins.json"
         
-        echo "**** Downloading Local REST API plugin... ****"
+        echo "**** Downloading Local REST API plugin for dummy vault... ****"
         curl -L -s -o "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/main.js" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/main.js"
         curl -L -s -o "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/manifest.json" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/manifest.json"
         echo "{\"apiKey\":\"$OBSIDIAN_API_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true}" > "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
@@ -43,7 +43,6 @@ else
     
     if [ ! -d "$VAULT_PATH/.git" ]; then
         if [ -n "$GIT_REPO_URL" ] && [ -n "$GITHUB_PAT" ]; then
-            # Construct HTTPS URL with PAT: https://<token>@github.com/user/repo.git
             AUTH_URL=$(echo "$GIT_REPO_URL" | sed -E "s|git@github.com:|https://$GITHUB_PAT@github.com/|")
             echo "**** Cloning real vault... ****"
             sudo -u abc git clone "$AUTH_URL" "$VAULT_PATH"
@@ -51,34 +50,7 @@ else
             echo "**** ERROR: TEST_MODE=false but GIT_REPO_URL or GITHUB_PAT missing! ****"
         fi
     fi
-
-    # Ensure Local REST API is enabled and configured
-    PLUGIN_DIR="$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api"
-    mkdir -p "$PLUGIN_DIR"
-    if [ ! -f "$PLUGIN_DIR/main.js" ]; then
-        echo "**** Downloading Local REST API plugin... ****"
-        curl -L -s -o "$PLUGIN_DIR/main.js" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/main.js"
-        curl -L -s -o "$PLUGIN_DIR/manifest.json" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/manifest.json"
-    fi
-    echo "{\"apiKey\":\"$OBSIDIAN_API_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true}" > "$PLUGIN_DIR/data.json"
-    
-    if [ -f "$VAULT_PATH/.obsidian/community-plugins.json" ]; then
-        if ! grep -q "obsidian-local-rest-api" "$VAULT_PATH/.obsidian/community-plugins.json"; then
-            sed -i 's/\]/, \"obsidian-local-rest-api\"\]/' "$VAULT_PATH/.obsidian/community-plugins.json"
-            sed -i 's/\[, /\[/' "$VAULT_PATH/.obsidian/community-plugins.json"
-        fi
-    else
-        echo '["obsidian-local-rest-api"]' > "$VAULT_PATH/.obsidian/community-plugins.json"
-    fi
-    
-    if [ -f "$VAULT_PATH/.obsidian/app.json" ]; then
-        sed -i 's/"pluginEnabled": false/"pluginEnabled": true/' "$VAULT_PATH/.obsidian/app.json"
-        if ! grep -q "pluginEnabled" "$VAULT_PATH/.obsidian/app.json"; then
-            sed -i 's/\{/\{"pluginEnabled": true, /' "$VAULT_PATH/.obsidian/app.json"
-        fi
-    else
-        echo '{"pluginEnabled": true}' > "$VAULT_PATH/.obsidian/app.json"
-    fi
+    # No automated config for real vaults - assume user has it configured in git.
 fi
 
 # 2. Ensure Obsidian config reflects selected vault
