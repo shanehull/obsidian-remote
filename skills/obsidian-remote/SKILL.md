@@ -29,4 +29,4 @@ This skill enables interaction with a remote Obsidian vault using the Model Cont
 
 ## Usage
 
-Configure your MCP client to connect to the server's endpoint (Port 4000) as described in the project `README.md`.
+Configure your MCP client to connect to the server's endpoint as described in the project `README.md`.

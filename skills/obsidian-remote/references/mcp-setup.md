@@ -4,7 +4,7 @@ This reference provides configuration examples for connecting popular MCP client
 
 ## Configure MCP Client
 
-Replace `<host-ip>` with your VPS IP address or domain name.
+Replace `<server-url>` with your server's endpoint (e.g., `https://obsidian.yourdomain.com/mcp` or `http://<ip>:4000/mcp`).
 
 ### Gemini CLI
 File: `~/.config/gemini/settings.json`
@@ -13,8 +13,32 @@ File: `~/.config/gemini/settings.json`
 {
   "mcpServers": {
     "obsidian-remote": {
-      "url": "http://<host-ip>:4000/mcp"
+      "url": "<server-url>"
     }
+  }
+}
+```
+
+### Cursor
+File: `~/.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "obsidian-remote": {
+      "url": "<server-url>"
+    }
+  }
+}
+```
+
+### Amp (Sourcegraph)
+File: `~/.config/agents/skills/obsidian-remote/mcp.json`
+
+```json
+{
+  "obsidian-remote": {
+    "url": "<server-url>"
   }
 }
 ```
@@ -26,26 +50,8 @@ File: `~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "obsidian-remote": {
-      "url": "http://<host-ip>:4000/mcp"
+      "url": "<server-url>"
     }
-  }
-}
-```
-
-### Cursor
-1. Open Cursor Settings > MCP.
-2. Click **+ Add New MCP Server**.
-3. Name: `obsidian-remote`
-4. Type: `SSE`
-5. URL: `http://<host-ip>:4000/mcp`
-
-### Gemini CLI Skill
-File: `~/.config/agents/skills/obsidian-remote/mcp.json`
-
-```json
-{
-  "obsidian-remote": {
-    "url": "http://<host-ip>:4000/mcp"
   }
 }
 ```
@@ -66,7 +72,7 @@ The following tools are available once connected:
 
 ## Troubleshooting
 
-- **Connection Refused:** Ensure the container is running (`docker-compose ps`) and port 4000 is open in your firewall.
+- **Connection Refused:** Ensure the container is running (`docker-compose ps`) and the port is open in your firewall.
 - **404 Not Found:** Verify the URL ends in `/mcp`.
 - **401 Unauthorized:** Ensure the `OBSIDIAN_API_KEY` in your `.env` matches the one generated in the Obsidian Web UI.
 - **REST API Not Active:** You must manually click **"Trust"** once in the VNC Web UI (`http://<host-ip>:3000`) for the vault to open and the plugin to start.
