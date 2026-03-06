@@ -7,6 +7,8 @@ OBSIDIAN_CONFIG_DIR="/config/.config/obsidian"
 OBSIDIAN_JSON="$OBSIDIAN_CONFIG_DIR/obsidian.json"
 
 # 1. Vault Logic
+mkdir -p "$VAULT_PATH"
+
 if [ "$TEST_MODE" = "true" ]; then
     VAULT_ID_FILE="/config/.vault_id_test"
     if [ -f "$VAULT_ID_FILE" ]; then

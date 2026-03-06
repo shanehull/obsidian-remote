@@ -7,7 +7,7 @@ This reference provides configuration examples for connecting popular MCP client
 Replace `<server-url>` with your server's endpoint (e.g., `https://obsidian.yourdomain.com/mcp` or `http://<ip>:4000/mcp`).
 
 ### Gemini CLI
-File: `~/.config/gemini/settings.json`
+**Config File:** `~/.gemini/settings.json`
 
 ```json
 {
@@ -19,8 +19,13 @@ File: `~/.config/gemini/settings.json`
 }
 ```
 
+**CLI Alternative:**
+```bash
+gemini mcp add obsidian-remote --transport http <server-url>
+```
+
 ### Cursor
-File: `~/.cursor/mcp.json`
+**Config File:** `~/.cursor/mcp.json`
 
 ```json
 {
@@ -33,7 +38,7 @@ File: `~/.cursor/mcp.json`
 ```
 
 ### Amp (Sourcegraph)
-File: `~/.config/agents/skills/obsidian-remote/mcp.json`
+**Config File:** `~/.config/agents/skills/obsidian-remote/mcp.json`
 
 ```json
 {
@@ -41,6 +46,11 @@ File: `~/.config/agents/skills/obsidian-remote/mcp.json`
     "url": "<server-url>"
   }
 }
+```
+
+**CLI Alternative:**
+```bash
+amp mcp add obsidian-remote --transport http <server-url>
 ```
 
 ### Claude Desktop

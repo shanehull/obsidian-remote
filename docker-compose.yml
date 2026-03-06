@@ -14,9 +14,7 @@ services:
       - OBSIDIAN_API_KEY=${OBSIDIAN_API_KEY}
     volumes:
       - ./config:/config
-      - ./vaults:/vaults
     ports:
       - 3000:3000 # Web UI (KasmVNC)
       - 4000:4000 # MCP SSE Bridge (Bridge for AI agents)
-      - 27123:27123 # Local REST API (Internal usage)
     restart: unless-stopped
