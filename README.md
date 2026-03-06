@@ -11,8 +11,8 @@ A containerized Obsidian instance with a built-in MCP server for automated note 
     Edit `.env` and set:
     - `TEST_MODE`: `true` (isolated dummy vault) or `false` (real Git vault).
     - `VNC_PASSWORD`: Password for the Web UI.
-    - `GIT_REPO_URL`: Your private vault repository.
-    - `SSH_PRIVATE_KEY`: Your SSH key (base64 encoded recommended).
+    - `GIT_REPO_URL`: Your private vault repository (e.g. `git@github.com:user/repo.git`).
+    - `GITHUB_PAT`: Your GitHub Personal Access Token with `repo` scope.
     - `OBSIDIAN_API_KEY`: A strong token for the REST API.
 
 2.  **Start the server:**

@@ -29,7 +29,7 @@ export MCP_TRANSPORT_TYPE=http\n\
 export MCP_HTTP_PORT=4000\n\
 export MCP_HTTP_HOST=0.0.0.0\n\
 export MCP_ALLOWED_ORIGINS=\"*\"\n\
-export OBSIDIAN_BASE_URL=https://127.0.0.1:27123\n\
+export OBSIDIAN_BASE_URL=https://localhost:27123\n\
 export OBSIDIAN_VERIFY_SSL=false\n\
 export NODE_ENV=production\n\
 # Ensure logs directory exists\n\

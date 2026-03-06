@@ -10,7 +10,7 @@ services:
       - TEST_MODE=${TEST_MODE:-true}
       - PASSWORD=${VNC_PASSWORD}
       - GIT_REPO_URL=${GIT_REPO_URL}
-      - SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
+      - GITHUB_PAT=${GITHUB_PAT}
       - OBSIDIAN_API_KEY=${OBSIDIAN_API_KEY}
     volumes:
       - ./config:/config
