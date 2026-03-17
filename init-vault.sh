@@ -22,8 +22,7 @@ if [ "$TEST_MODE" = "true" ]; then
     if [ ! -d "$VAULT_PATH/.obsidian" ]; then
         echo "**** TEST_MODE=true: Seeding isolated dummy vault ****"
         mkdir -p "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api"
-        # Seed basic config
-        echo '{"pluginSafeMode": false}' > "$VAULT_PATH/.obsidian/app.json"
+        echo '{"pluginSafeMode":false}' > "$VAULT_PATH/.obsidian/app.json"
         echo '["obsidian-local-rest-api"]' > "$VAULT_PATH/.obsidian/community-plugins.json"
         # Download API plugin
         curl -L -s -o "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/main.js" "https://github.com/coddingtonbear/obsidian-local-rest-api/releases/latest/download/main.js"
@@ -40,15 +39,8 @@ else
     else
         cd "$VAULT_PATH" && git pull
     fi
-    # Always enforce the API key for the bridge
-    PLUGIN_DATA="$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
-    if [ -f "$PLUGIN_DATA" ]; then
-        sed -i "s/\"apiKey\":\"[^\"]*\"/\"apiKey\":\"$OBSIDIAN_KEY\"/" "$PLUGIN_DATA"
-        # Ensure insecure port is set
-        if ! grep -q "insecurePort" "$PLUGIN_DATA"; then
-            sed -i "s/}/,\"insecurePort\":27124,\"enableInsecureServer\":true}/" "$PLUGIN_DATA"
-        fi
-    fi
+    # Override plugin config for the bridge (insecure HTTP on 27124, localhost only)
+    echo "{\"apiKey\":\"$OBSIDIAN_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true,\"insecurePort\":27124}" > "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
 fi
 
 # 3. Ensure vault structure is complete
@@ -60,9 +52,6 @@ WORKSPACE_FILE="$VAULT_PATH/.obsidian/workspace.json"
 if [ ! -f "$WORKSPACE_FILE" ]; then
     echo '{"main":{"id":"a","type":"split","children":[]},"active":"a"}' > "$WORKSPACE_FILE"
 fi
-
-# Seed app config
-echo '{"pluginSafeMode":false,"enabledCommunityPlugins":["obsidian-local-rest-api"]}' > "$VAULT_PATH/.obsidian/app.json"
 
 # 4. AUTO-TRUST LOGIC (RFC 9728)
 # Pre-seed the global obsidian.json to mark the vault as Trusted and Open
