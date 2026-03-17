@@ -17,6 +17,18 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 - A public URL (HTTPS) if accessing from outside your local network.
 - A Google OAuth client ID and secret. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients like Gemini CLI and Cursor. Other OIDC providers are supported for JWT validation only.
 
+## Resource Requirements
+
+The container runs headless Obsidian (Electron/Chromium) with Xvfb alongside the Go MCP server. Chromium is the dominant memory consumer.
+
+| Resource | Minimum | Recommended |
+| :------- | :------ | :---------- |
+| RAM      | 1 GB    | 2 GB        |
+| CPU      | 1 vCPU  | 1 vCPU      |
+| Disk     | 3 GB    | 5 GB+       |
+
+Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical runtime memory sits around 300–500 MB depending on vault size.
+
 ## Setup
 
 1. **Configure Environment:**
@@ -98,9 +110,12 @@ Clients that support the SSE transport can connect to `/sse` instead:
 | `/mcp`                                    | POST/GET/DELETE | Streamable HTTP transport (recommended)      |
 | `/sse`                                    | GET             | SSE transport                                |
 | `/message`                                | POST            | SSE message endpoint                         |
+| `/authorize`                              | GET             | OAuth authorize proxy (injects scope)        |
 | `/token`                                  | POST            | Token exchange proxy (injects client secret) |
+| `/config`                                 | GET             | Dynamic client config (issuer + client ID)   |
 | `/.well-known/oauth-protected-resource`   | GET             | RFC 9728 resource metadata                   |
 | `/.well-known/oauth-authorization-server` | GET             | RFC 8414 authorization server metadata       |
+| `/.well-known/mcp`                        | GET             | MCP-specific resource discovery              |
 | `/register`                               | POST            | Dynamic client registration (RFC 7591)       |
 
 ## Available Tools
