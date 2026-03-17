@@ -1,42 +1,44 @@
+# Stage 1: Build the Go MCP Server (Bridge)
+FROM golang:1.25 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+RUN CGO_ENABLED=0 go build -o server ./cmd/server/main.go
+
+# Stage 2: Unified Headless Container
 FROM lscr.io/linuxserver/obsidian:latest
 
-# Install Node.js from NodeSource
+# Install runtime dependencies for the bridge and auto-trust
 RUN apt-get update && \
-    apt-get install -y curl gnupg git sudo libnss3 dbus-x11 wmctrl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y curl ca-certificates bash wmctrl xdotool python3-pip && \
+    pip3 install --break-system-packages websocket-client && \
     rm -rf /var/lib/apt/lists/*
 
-# Fix desktop entry
-RUN ln -s /usr/bin/obsidian /usr/local/bin/AppRun && \
-    ln -s /usr/bin/obsidian /usr/bin/AppRun
+# Copy the Go MCP server binary from builder
+COPY --from=builder /app/server /usr/local/bin/mcp-bridge
 
-# Install MCP server globally
-RUN npm install -g obsidian-mcp-server
-
-# Copy vault init script
+# Copy the vault init script and auto-trust helper
 COPY init-vault.sh /custom-cont-init.d/init-vault.sh
-RUN chmod +x /custom-cont-init.d/init-vault.sh
+COPY auto-trust.sh /usr/local/bin/auto-trust.sh
+RUN chmod +x /custom-cont-init.d/init-vault.sh /usr/local/bin/auto-trust.sh
 
-# Create MCP Server Service
-RUN mkdir -p /etc/services.d/mcp-server
-RUN echo "#!/usr/bin/with-contenv bash\n\
-if [ -z \"\$OBSIDIAN_API_KEY\" ] || [ \"\$OBSIDIAN_API_KEY\" = \"YOUR_API_KEY\" ]; then\n\
-    echo \"**** OBSIDIAN_API_KEY not set. MCP Server disabled. ****\"\n\
-    sleep infinity\n\
-fi\n\
-export MCP_TRANSPORT_TYPE=http\n\
-export MCP_HTTP_PORT=4000\n\
-export MCP_HTTP_HOST=0.0.0.0\n\
-export MCP_ALLOWED_ORIGINS=\"*\"\n\
-export OBSIDIAN_BASE_URL=https://127.0.0.1:27123\n\
-export OBSIDIAN_VERIFY_SSL=false\n\
-export NODE_ENV=production\n\
-# Ensure logs directory exists\n\
-mkdir -p /usr/lib/node_modules/obsidian-mcp-server/logs\n\
-chown -R abc:abc /usr/lib/node_modules/obsidian-mcp-server\n\
-cd /usr/lib/node_modules/obsidian-mcp-server\n\
-exec s6-setuidgid abc node dist/index.js" > /etc/services.d/mcp-server/run
-RUN chmod +x /etc/services.d/mcp-server/run
+# Create the Headless Obsidian Service (with remote debugging for auto-trust)
+RUN mkdir -p /etc/services.d/obsidian && \
+    printf "#!/usr/bin/with-contenv bash\nexport DISPLAY=:1\nexec s6-setuidgid abc /opt/obsidian/obsidian --no-sandbox --remote-debugging-port=9222 --remote-allow-origins=* /vaults\n" > /etc/services.d/obsidian/run && \
+    chmod +x /etc/services.d/obsidian/run
 
-EXPOSE 3000 4000 27123
+# Create the MCP Bridge Service
+RUN mkdir -p /etc/services.d/mcp-bridge && \
+    printf "#!/usr/bin/with-contenv bash\nexec s6-setuidgid abc /usr/local/bin/mcp-bridge\n" > /etc/services.d/mcp-bridge/run && \
+    chmod +x /etc/services.d/mcp-bridge/run
+
+# Auto-trust service: clicks the plugin trust dialog after Obsidian starts.
+# Uses s6-svc -O to mark itself "once" so s6 doesn't restart it after success.
+RUN mkdir -p /etc/services.d/auto-trust && \
+    printf '#!/usr/bin/with-contenv bash\ns6-setuidgid abc /usr/local/bin/auto-trust.sh\n# Prevent s6 from restarting after completion\nsleep infinity\n' > /etc/services.d/auto-trust/run && \
+    chmod +x /etc/services.d/auto-trust/run
+
+# We only expose the MCP port. The REST API is internal.
+EXPOSE 4000

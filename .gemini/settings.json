@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "obsidian-remote": {
+      "httpUrl": "http://localhost:4000/mcp",
+      "oauth": {
+        "clientId": "732346191627-u651rf1emjc2tmb3mpe5751g8qla4cgm.apps.googleusercontent.com",
+        "scopes": ["openid", "email", "profile"]
+      }
+    }
+  }
+}

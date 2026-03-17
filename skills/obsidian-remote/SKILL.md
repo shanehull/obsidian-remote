@@ -1,32 +1,32 @@
 ---
 name: obsidian-remote
-description: Manage a remote Obsidian vault via MCP.
-compatibility: Requires Obsidian Remote container with MCP enabled.
+description: Manage a remote Obsidian vault via MCP (Headless Go Edition).
+compatibility: Requires Obsidian Remote (Go) container.
 allowed-tools: mcp__obsidian-remote__*
 ---
 
-# Obsidian Remote Skill
+# Obsidian Remote Skill (Headless Go)
 
-This skill enables interaction with a remote Obsidian vault using the Model Context Protocol.
+This skill enables high-performance interaction with a remote Obsidian vault using the Model Context Protocol.
+
+## Configuration
+
+The server is configured via environment variables. Key variables include:
+
+- `PUBLIC_HOST`: The external URL of your MCP server.
+- `OAUTH_ISSUER`: Your OAuth provider's issuer URL.
+- `OAUTH_JWKS_URL`: Your OAuth provider's JWKS endpoint.
+- `OAUTH_AUDIENCE`: Your OAuth Client ID.
+- `OAUTH_ALLOWED_EMAIL`: Authorized email for access.
 
 ## Tools
 
-### Note Management
-
-- `obsidian_read_note`: Retrieve note content and metadata.
-- `obsidian_update_note`: Create, append, or overwrite notes.
-- `obsidian_list_notes`: List files and folders.
-
-### Search
-
-- `obsidian_global_search`: Search for text or regex across the vault.
-- `obsidian_search_replace`: Perform search-and-replace within a note.
-
-### Metadata
-
-- `obsidian_manage_frontmatter`: Atomic YAML key management.
-- `obsidian_manage_tags`: Add or remove tags.
+- `obsidian_list_notes`: List all files in the vault.
+- `obsidian_read_note`: Retrieve the full content of a specific note.
+- `obsidian_update_note`: Create or overwrite a note.
+- `obsidian_global_search`: Search for text or regex across all notes.
+- `obsidian_manage_frontmatter`: Get or set YAML frontmatter keys (via `/metadata/` endpoint).
 
 ## Usage
 
-Configure your MCP client to connect to the server's endpoint (Port 4000) as described in the project `README.md`.
+Configure your MCP client to connect to the server's SSE endpoint (Port 4000). The Gemini CLI will automatically handle OIDC discovery and authentication.

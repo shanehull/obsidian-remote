@@ -2,21 +2,16 @@ services:
   obsidian:
     build: .
     container_name: obsidian
-    shm_size: "1gb"
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
       - TEST_MODE=${TEST_MODE:-true}
-      - PASSWORD=${VNC_PASSWORD}
       - GIT_REPO_URL=${GIT_REPO_URL}
-      - SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
-      - OBSIDIAN_API_KEY=${OBSIDIAN_API_KEY}
-    volumes:
-      - ./config:/config
-      - ./vaults:/vaults
+      - GITHUB_PAT=${GITHUB_PAT}
+      - OAUTH_ISSUER=${OAUTH_ISSUER:-https://accounts.google.com}
+      - OAUTH_JWKS_URL=${OAUTH_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
+      - OAUTH_AUDIENCE=${OAUTH_AUDIENCE:-}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      - OAUTH_ALLOWED_EMAIL=${OAUTH_ALLOWED_EMAIL:-}
+      - PUBLIC_HOST=${PUBLIC_HOST:-}
     ports:
-      - 3000:3000 # Web UI (KasmVNC)
-      - 4000:4000 # MCP SSE Bridge (Bridge for AI agents)
-      - 27123:27123 # Local REST API (Internal usage)
+      - 4000:4000 # MCP Server (Streamable HTTP + SSE)
     restart: unless-stopped

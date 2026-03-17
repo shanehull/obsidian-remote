@@ -1,5 +1,5 @@
 # Local container data
-config/
+/config/
 vaults/
 
 # Python cache
