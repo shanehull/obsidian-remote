@@ -15,7 +15,7 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 
 - Docker and Docker Compose.
 - A public URL (HTTPS) if accessing from outside your local network.
-- A Google OAuth client ID and secret (other OIDC providers are supported for JWT validation only).
+- A Google OAuth client ID and secret. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients like Gemini CLI and Cursor. Other OIDC providers are supported for JWT validation only.
 
 ## Setup
 
