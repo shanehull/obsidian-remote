@@ -4,18 +4,18 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 
 ## Features
 
-- **Headless & Fast:** Direct filesystem and API access with zero GUI overhead.
+- **Headless & Fast:** Runs Obsidian headlessly with all vault operations via the Local REST API.
 - **RFC 9728 Compliant:** Implements OAuth-protected resource discovery.
 - **Dual Transport:** Supports both Streamable HTTP and SSE transports.
 - **Secure:** Integrated JWT and OAuth access token validation with email-based access control.
 - **Server-Side Token Proxy:** Clients never need the OAuth client secret — the server injects it during the token exchange.
-- **Provider Agnostic:** Supports any OpenID Connect (OIDC) provider (Google, GitHub, Auth0, etc.).
+- **Google OAuth:** JWT validation via JWKS with opaque access token fallback via Google's tokeninfo endpoint.
 
 ## Prerequisites
 
-- An Obsidian vault with the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin installed and configured.
+- Docker and Docker Compose.
 - A public URL (HTTPS) if accessing from outside your local network.
-- An OAuth client ID (and secret) from your OIDC provider.
+- A Google OAuth client ID and secret (other OIDC providers are supported for JWT validation only).
 
 ## Setup
 
@@ -26,16 +26,27 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
    ```
 
    Edit `.env` with your configuration:
+
+   **Server:**
    - `PUBLIC_HOST`: The external URL of this server (e.g., `https://obsidian.yourdomain.com`).
+
+   **OAuth:**
    - `OAUTH_ISSUER`: Your OIDC issuer (e.g., `https://accounts.google.com`).
    - `OAUTH_JWKS_URL`: The URL to fetch public signing keys (e.g., `https://www.googleapis.com/oauth2/v3/certs`).
+   - `OAUTH_AUTHORIZE_URL`: The provider's authorization endpoint (e.g., `https://accounts.google.com/o/oauth2/v2/auth`).
+   - `OAUTH_TOKEN_URL`: The provider's token endpoint (e.g., `https://oauth2.googleapis.com/token`).
    - `OAUTH_AUDIENCE`: Your OAuth Client ID.
    - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret (used server-side for the token exchange proxy).
    - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault.
 
+   **Vault Sync (optional):**
+   - `GIT_REPO_URL`: Git repository URL for vault sync (e.g., `git@github.com:user/vault.git`).
+   - `GITHUB_PAT`: GitHub personal access token for private repos.
+   - `VAULT_PATH`: Path to the vault inside the container (default: `/vaults`).
+
 2. **Run with Docker:**
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
 ## Client Configuration
@@ -104,4 +115,4 @@ Clients that support the SSE transport can connect to `/sse` instead:
 
 ## Architecture
 
-The server supports both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports, converting MCP tool calls into HTTP requests for the Obsidian Local REST API. Authentication is handled via OAuth 2.0 with support for both JWT (ID tokens) and opaque access tokens validated against the provider's tokeninfo endpoint.
+The Docker container bundles Obsidian (headless), the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin (auto-trusted on first boot), and the Go MCP server. The MCP server supports both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports, converting MCP tool calls into HTTP requests for the internal Obsidian REST API. Authentication is handled via OAuth 2.0 with support for both JWT (ID tokens) and opaque access tokens validated against Google's tokeninfo endpoint.
