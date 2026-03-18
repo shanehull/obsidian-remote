@@ -16,6 +16,7 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerListNotes(s, client)
 	registerReadNote(s, client)
 	registerUpdateNote(s, client)
+	registerAppendNote(s, client)
 	registerDeleteNote(s, client)
 	registerGlobalSearch(s, client)
 	registerSearchReplace(s, client)
@@ -72,6 +73,29 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		res, err := client.Call("PUT", "/vault/"+path, []byte(content))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(string(res)), nil
+	})
+}
+
+func registerAppendNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("append_note",
+		mcp.WithDescription("Append content to the end of an existing note"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Content to append")),
+		mcp.WithDestructiveHintAnnotation(true),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := req.RequireString("path")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		content, err := req.RequireString("content")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		res, err := client.Call("POST", "/vault/"+path, []byte(content))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

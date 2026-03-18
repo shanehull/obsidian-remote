@@ -123,13 +123,14 @@ Clients that support the SSE transport can connect to `/sse` instead:
 - `list_notes`: List all notes in the vault.
 - `read_note`: Read the content of a specific note.
 - `update_note`: Create or update a note.
+- `append_note`: Append content to the end of an existing note.
 - `delete_note`: Permanently delete a note.
 - `global_search`: Search for text or regex across the vault.
 - `search_replace`: Targeted search and replace within a specific file.
 - `manage_frontmatter`: Manage YAML frontmatter keys.
 - `manage_tags`: Add or remove tags from a note.
 
-Write operations (`update`, `delete`, `search_replace`, `manage_frontmatter`, `manage_tags`) are annotated as destructive, prompting clients to request user confirmation before execution.
+Write operations (`update`, `append`, `delete`, `search_replace`, `manage_frontmatter`, `manage_tags`) are annotated as destructive, prompting clients to request user confirmation before execution.
 
 ## Architecture
 

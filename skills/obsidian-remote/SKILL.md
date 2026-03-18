@@ -26,6 +26,7 @@ The server is configured via environment variables. See `.env.example` for the f
 
 - `read_note`: Retrieve note content and metadata.
 - `update_note`: Create or overwrite notes.
+- `append_note`: Append content to the end of an existing note.
 - `delete_note`: Permanently delete a note.
 - `list_notes`: List files and folders.
 
