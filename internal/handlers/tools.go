@@ -16,6 +16,7 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerListNotes(s, client)
 	registerReadNote(s, client)
 	registerUpdateNote(s, client)
+	registerDeleteNote(s, client)
 	registerGlobalSearch(s, client)
 	registerSearchReplace(s, client)
 	registerManageFrontmatter(s, client)
@@ -23,9 +24,10 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_list_notes",
+	s.AddTool(mcp.NewTool("list_notes",
 		mcp.WithDescription("List files in the vault"),
 		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
+		mcp.WithReadOnlyHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		subDir := req.GetString("dirPath", "")
 		res, err := client.Call("GET", "/vault/"+subDir, nil)
@@ -37,9 +39,10 @@ func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_read_note",
+	s.AddTool(mcp.NewTool("read_note",
 		mcp.WithDescription("Read a note"),
 		mcp.WithString("path", mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -54,10 +57,11 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_update_note",
+	s.AddTool(mcp.NewTool("update_note",
 		mcp.WithDescription("Create or update a note"),
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithString("content", mcp.Required()),
+		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -75,10 +79,29 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 	})
 }
 
+func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("delete_note",
+		mcp.WithDescription("Permanently delete a note from the vault"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note to delete")),
+		mcp.WithDestructiveHintAnnotation(true),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := req.RequireString("path")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		_, err = client.Call("DELETE", "/vault/"+path, nil)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("deleted %s", path)), nil
+	})
+}
+
 func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_global_search",
+	s.AddTool(mcp.NewTool("global_search",
 		mcp.WithDescription("Search for text across all notes"),
 		mcp.WithString("query", mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := req.RequireString("query")
 		if err != nil {
@@ -93,11 +116,12 @@ func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_search_replace",
+	s.AddTool(mcp.NewTool("search_replace",
 		mcp.WithDescription("Search and replace text within a specific note"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
 		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
+		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -134,11 +158,12 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_manage_tags",
+	s.AddTool(mcp.NewTool("manage_tags",
 		mcp.WithDescription("Add or remove tags from a note's frontmatter"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("operation", mcp.Required(), mcp.Description("add or remove")),
 		mcp.WithString("tag", mcp.Required(), mcp.Description("Tag value (without leading #)")),
+		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -203,10 +228,10 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 		tagsJSON, _ := json.Marshal(tags)
 		if _, err := client.Call("PATCH", "/vault/"+path, tagsJSON,
 			map[string]string{
-				"Content-Type":            "application/json",
-				"Operation":               "replace",
-				"Target-Type":             "frontmatter",
-				"Target":                  "tags",
+				"Content-Type":             "application/json",
+				"Operation":                "replace",
+				"Target-Type":              "frontmatter",
+				"Target":                   "tags",
 				"Create-Target-If-Missing": "true",
 			}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -221,11 +246,12 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 }
 
 func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("obsidian_manage_frontmatter",
+	s.AddTool(mcp.NewTool("manage_frontmatter",
 		mcp.WithDescription("Get or set YAML frontmatter keys"),
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithString("operation", mcp.Required(), mcp.Description("get or set")),
 		mcp.WithString("jsonPayload", mcp.Description("JSON object of keys to set (required for 'set')")),
+		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -261,10 +287,10 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 				b, _ := json.Marshal(v)
 				_, patchErr := client.Call("PATCH", "/vault/"+path, b,
 					map[string]string{
-						"Content-Type":            "application/json",
-						"Operation":               "replace",
-						"Target-Type":             "frontmatter",
-						"Target":                  k,
+						"Content-Type":             "application/json",
+						"Operation":                "replace",
+						"Target-Type":              "frontmatter",
+						"Target":                   k,
 						"Create-Target-If-Missing": "true",
 					})
 				if patchErr != nil {

@@ -72,13 +72,14 @@ Clients that support the SSE transport can connect to `/sse`:
 
 | Tool | Description |
 | :--- | :--- |
-| `obsidian_read_note` | Retrieve content and metadata (path, tags, frontmatter). |
-| `obsidian_update_note` | Create, append, prepend, or overwrite notes. |
-| `obsidian_list_notes` | List files and folders in the vault. |
-| `obsidian_global_search` | Search for text or regex across the entire vault. |
-| `obsidian_search_replace` | Targeted search and replace within a specific file. |
-| `obsidian_manage_frontmatter` | Get, set, or delete specific YAML frontmatter keys. |
-| `obsidian_manage_tags` | Add or remove tags from a note. |
+| `read_note` | Retrieve content and metadata (path, tags, frontmatter). |
+| `update_note` | Create or overwrite notes. |
+| `delete_note` | Permanently delete a note. |
+| `list_notes` | List files and folders in the vault. |
+| `global_search` | Search for text or regex across the entire vault. |
+| `search_replace` | Targeted search and replace within a specific file. |
+| `manage_frontmatter` | Get, set, or delete specific YAML frontmatter keys. |
+| `manage_tags` | Add or remove tags from a note. |
 
 ## Troubleshooting
 

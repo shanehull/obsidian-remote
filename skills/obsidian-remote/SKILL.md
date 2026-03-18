@@ -24,19 +24,20 @@ The server is configured via environment variables. See `.env.example` for the f
 
 ### Note Management
 
-- `obsidian_read_note`: Retrieve note content and metadata.
-- `obsidian_update_note`: Create, append, or overwrite notes.
-- `obsidian_list_notes`: List files and folders.
+- `read_note`: Retrieve note content and metadata.
+- `update_note`: Create or overwrite notes.
+- `delete_note`: Permanently delete a note.
+- `list_notes`: List files and folders.
 
 ### Search
 
-- `obsidian_global_search`: Search for text or regex across the vault.
-- `obsidian_search_replace`: Perform search-and-replace within a note.
+- `global_search`: Search for text or regex across the vault.
+- `search_replace`: Perform search-and-replace within a note.
 
 ### Metadata
 
-- `obsidian_manage_frontmatter`: Atomic YAML key management.
-- `obsidian_manage_tags`: Add or remove tags.
+- `manage_frontmatter`: Atomic YAML key management.
+- `manage_tags`: Add or remove tags.
 
 ## Usage
 

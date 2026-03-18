@@ -120,13 +120,16 @@ Clients that support the SSE transport can connect to `/sse` instead:
 
 ## Available Tools
 
-- `obsidian_list_notes`: List all notes in the vault.
-- `obsidian_read_note`: Read the content of a specific note.
-- `obsidian_update_note`: Create or update a note.
-- `obsidian_global_search`: Search for text or regex across the vault.
-- `obsidian_search_replace`: Targeted search and replace within a specific file.
-- `obsidian_manage_frontmatter`: Manage YAML frontmatter keys.
-- `obsidian_manage_tags`: Add or remove tags from a note.
+- `list_notes`: List all notes in the vault.
+- `read_note`: Read the content of a specific note.
+- `update_note`: Create or update a note.
+- `delete_note`: Permanently delete a note.
+- `global_search`: Search for text or regex across the vault.
+- `search_replace`: Targeted search and replace within a specific file.
+- `manage_frontmatter`: Manage YAML frontmatter keys.
+- `manage_tags`: Add or remove tags from a note.
+
+Write operations (`update`, `delete`, `search_replace`, `manage_frontmatter`, `manage_tags`) are annotated as destructive, prompting clients to request user confirmation before execution.
 
 ## Architecture
 
