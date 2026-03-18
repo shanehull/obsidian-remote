@@ -68,5 +68,7 @@ Clients that support the SSE transport can connect to `/sse`:
 
 ## Troubleshooting
 
+- **"No client ID provided":** Ensure `OAUTH_AUDIENCE` is set in the server's `.env`. The server provides this to clients automatically via discovery.
+- **"client_secret is missing":** The server's `/token` proxy handles this. Make sure `OAUTH_CLIENT_SECRET` is set in the server's `.env`.
 - **401 Unauthorized:** Your token is invalid/expired, or `OAUTH_ALLOWED_EMAIL` doesn't match your Google account.
 - **Connection Refused:** Ensure the container is running and the port is open.
