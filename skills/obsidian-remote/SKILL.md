@@ -45,6 +45,7 @@ The server is configured via environment variables. See `.env.example` for the f
 ### Search Results Formatting
 
 The `global_search` tool returns raw JSON. You MUST format these results into a clean, human-readable Markdown list.
+
 - Group results by file.
 - Provide a brief context snippet for each match.
 - Use a concise summary if there are many matches.
