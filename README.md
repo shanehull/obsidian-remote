@@ -134,4 +134,35 @@ Write operations (`update`, `append`, `delete`, `search_replace`, `manage_frontm
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    subgraph clients ["MCP Clients"]
+        gemini["Gemini CLI"]
+        cursor["Cursor"]
+        amp["Amp"]
+    end
+
+    subgraph container ["Docker Container"]
+        subgraph server ["Go MCP Server :4000"]
+            transport["/mcp and /sse"]
+            auth["OAuth Middleware"]
+        end
+
+        subgraph obsidian ["Headless Obsidian + Xvfb"]
+            api["Local REST API :27124"]
+            git["obsidian-git"]
+            vault["/vaults"]
+        end
+    end
+
+    remote["Git Remote"]
+
+    clients -->|HTTPS| transport
+    transport --> auth
+    auth -->|"HTTP :27124"| api
+    api --> vault
+    git -->|sync| vault
+    vault <-->|Git| remote
+```
+
 The Docker container bundles Obsidian (headless), the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin (auto-trusted on first boot), and the Go MCP server. The MCP server supports both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports, converting MCP tool calls into HTTP requests for the internal Obsidian REST API. Authentication is handled via OAuth 2.0 with support for both JWT (ID tokens) and opaque access tokens validated against Google's tokeninfo endpoint.
