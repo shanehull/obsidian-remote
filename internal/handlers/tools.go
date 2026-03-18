@@ -24,13 +24,17 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerManageTags(s, client)
 }
 
+func normalizePath(path string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
+}
+
 func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
 	s.AddTool(mcp.NewTool("list_notes",
 		mcp.WithDescription("List files in the vault"),
 		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
 		mcp.WithReadOnlyHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		subDir := req.GetString("dirPath", "")
+		subDir := normalizePath(req.GetString("dirPath", ""))
 		res, err := client.Call("GET", "/vault/"+subDir, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -49,6 +53,7 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		res, err := client.Call("GET", "/vault/"+path, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -68,15 +73,16 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		content, err := req.RequireString("content")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		res, err := client.Call("PUT", "/vault/"+path, []byte(content))
+		_, err = client.Call("PUT", "/vault/"+path, []byte(content))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(res)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully updated note: %s", path)), nil
 	})
 }
 
@@ -91,15 +97,16 @@ func registerAppendNote(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		content, err := req.RequireString("content")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		res, err := client.Call("POST", "/vault/"+path, []byte(content))
+		_, err = client.Call("POST", "/vault/"+path, []byte(content))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(res)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully appended content to: %s", path)), nil
 	})
 }
 
@@ -113,11 +120,12 @@ func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		_, err = client.Call("DELETE", "/vault/"+path, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("deleted %s", path)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully deleted note: %s", path)), nil
 	})
 }
 
@@ -151,6 +159,7 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		search, err := req.RequireString("search")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -177,7 +186,7 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("replaced %d occurrence(s)", count)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", count, path)), nil
 	})
 }
 
@@ -193,6 +202,7 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		op, err := req.RequireString("operation")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -229,7 +239,7 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 		case "add":
 			for _, t := range tags {
 				if t == tag {
-					return mcp.NewToolResultText("tag already exists"), nil
+					return mcp.NewToolResultText(fmt.Sprintf("Tag '%s' already exists in %s", tag, path)), nil
 				}
 			}
 			tags = append(tags, tag)
@@ -244,7 +254,7 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 				filtered = append(filtered, t)
 			}
 			if !found {
-				return mcp.NewToolResultError("tag not found"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Tag '%s' not found in %s", tag, path)), nil
 			}
 			tags = filtered
 		}
@@ -261,9 +271,9 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		msg := fmt.Sprintf("tag '%s' added", tag)
+		msg := fmt.Sprintf("Successfully added tag '%s' to %s", tag, path)
 		if op == "remove" {
-			msg = fmt.Sprintf("tag '%s' removed", tag)
+			msg = fmt.Sprintf("Successfully removed tag '%s' from %s", tag, path)
 		}
 		return mcp.NewToolResultText(msg), nil
 	})
@@ -281,6 +291,7 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		path = normalizePath(path)
 		op, err := req.RequireString("operation")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -324,7 +335,7 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 			if len(errs) > 0 {
 				return mcp.NewToolResultError("errors: " + strings.Join(errs, "; ")), nil
 			}
-			return mcp.NewToolResultText("frontmatter updated"), nil
+			return mcp.NewToolResultText(fmt.Sprintf("Successfully updated frontmatter for: %s", path)), nil
 		}
 
 		return mcp.NewToolResultError("Invalid operation. Use 'get' or 'set'."), nil
