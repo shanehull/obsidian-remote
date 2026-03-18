@@ -31,6 +31,7 @@ if [ "$TEST_MODE" = "true" ]; then
         echo "{\"apiKey\":\"$OBSIDIAN_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true,\"insecurePort\":27124}" > "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
     fi
 else
+    git config --global --add safe.directory "$VAULT_PATH"
     if [ ! -d "$VAULT_PATH/.git" ]; then
         if [ -n "$GIT_REPO_URL" ] && [ -n "$GITHUB_PAT" ]; then
             AUTH_URL=$(echo "$GIT_REPO_URL" | sed -E "s|git@github.com:|https://$GITHUB_PAT@github.com/|")
@@ -39,13 +40,17 @@ else
     else
         cd "$VAULT_PATH" && git pull
     fi
+    # Configure git identity for obsidian-git plugin
+    cd "$VAULT_PATH"
+    git config user.name "obsidian-remote"
+    git config user.email "obsidian-remote@noreply"
+
     # Override plugin config for the bridge (insecure HTTP on 27124, localhost only)
     echo "{\"apiKey\":\"$OBSIDIAN_KEY\",\"bindAddress\":\"127.0.0.1\",\"port\":27123,\"enableInsecureServer\":true,\"insecurePort\":27124}" > "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api/data.json"
 fi
 
 # 3. Ensure vault structure is complete
 mkdir -p "$VAULT_PATH/.obsidian/plugins/obsidian-local-rest-api"
-touch "$VAULT_PATH/Welcome.md"
 
 # Seed workspace if it doesn't exist
 WORKSPACE_FILE="$VAULT_PATH/.obsidian/workspace.json"
