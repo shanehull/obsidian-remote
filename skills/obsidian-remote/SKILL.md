@@ -11,14 +11,34 @@ This skill enables interaction with a remote Obsidian vault using the Model Cont
 
 ## Configuration
 
+### Server Configuration
+
 The server is configured via environment variables. See `.env.example` for the full list. Key variables:
 
 - `PUBLIC_HOST`: The external URL of your MCP server.
+
+**OAuth (Optional):**
 - `OAUTH_ISSUER`: Your OAuth provider's issuer URL.
 - `OAUTH_JWKS_URL`: Your OAuth provider's JWKS endpoint.
-- `OAUTH_AUDIENCE`: Your OAuth Client ID.
+- `OAUTH_AUDIENCE`: Your OAuth Client ID. If not set, authentication is disabled.
 - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret (used server-side for the token exchange proxy).
-- `OAUTH_ALLOWED_EMAIL`: Authorized email for access.
+- `OAUTH_ALLOWED_EMAIL`: Authorized email for access. If not set, any authenticated user is allowed.
+
+### Client Configuration
+
+For Gemini CLI and other MCP clients, use the simple configuration in your `settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "obsidian-remote": {
+      "httpUrl": "https://obsidian.yourdomain.com/mcp"
+    }
+  }
+}
+```
+
+If the server has `OAUTH_AUDIENCE` configured, Gemini will automatically discover and handle OAuth via RFC 9728. No explicit oauth block is required in the client configuration.
 
 ## Tools
 

@@ -15,7 +15,7 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 
 - Docker and Docker Compose.
 - A public URL (HTTPS) if accessing from outside your local network.
-- A Google OAuth client ID and secret. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients like Gemini CLI and Cursor. Other OIDC providers are supported for JWT validation only.
+- (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients like Gemini CLI and Cursor. Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
 
 ## Resource Requirements
 
@@ -42,14 +42,14 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
    **Server:**
    - `PUBLIC_HOST`: The external URL of this server (e.g., `https://obsidian.yourdomain.com`).
 
-   **OAuth:**
+   **OAuth (Optional):**
    - `OAUTH_ISSUER`: Your OIDC issuer (e.g., `https://accounts.google.com`).
    - `OAUTH_JWKS_URL`: The URL to fetch public signing keys (e.g., `https://www.googleapis.com/oauth2/v3/certs`).
    - `OAUTH_AUTHORIZE_URL`: The provider's authorization endpoint (e.g., `https://accounts.google.com/o/oauth2/v2/auth`).
    - `OAUTH_TOKEN_URL`: The provider's token endpoint (e.g., `https://oauth2.googleapis.com/token`).
-   - `OAUTH_AUDIENCE`: Your OAuth Client ID.
+   - `OAUTH_AUDIENCE`: Your OAuth Client ID. If not set, authentication is disabled.
    - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret (used server-side for the token exchange proxy).
-   - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault.
+   - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault. If not set, any authenticated user is allowed.
 
    **Vault Sync (optional):**
    - `GIT_REPO_URL`: Git repository URL for vault sync (e.g., `git@github.com:user/vault.git`).
@@ -66,6 +66,20 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
 ### Gemini CLI
 
 Add to your `~/.config/gemini/settings.json` (or `.gemini/settings.json` in the project):
+
+**Simple Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "obsidian-remote": {
+      "httpUrl": "https://obsidian.yourdomain.com/mcp"
+    }
+  }
+}
+```
+
+If `OAUTH_AUDIENCE` is configured on the server, Gemini will automatically discover the OAuth endpoints via `/.well-known/oauth-protected-resource` and handle authentication (no explicit oauth block needed). If you prefer explicit OAuth configuration or for some reason automatic discovery doesn't work, you can add:
 
 ```json
 {
