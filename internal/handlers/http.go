@@ -30,11 +30,11 @@ func HandleDiscovery(cfg *config.Config) http.HandlerFunc {
 		slog.Info("discovery request", "host", host, "path", r.URL.Path, "resource_path", resourcePath)
 
 		res := map[string]interface{}{
-			"resource":              fmt.Sprintf("%s%s", strings.TrimSuffix(host, "/"), resourcePath),
-			"resource_name":         "obsidian-remote",
-			"authorization_servers": []string{host}, // Tell the CLI to look at us for the login URLs
-			"client_id":             cfg.OAuthAudience,
-			"clientId":              cfg.OAuthAudience,
+			"resource":                 fmt.Sprintf("%s%s", strings.TrimSuffix(host, "/"), resourcePath),
+			"resource_name":            "obsidian-remote",
+			"authorization_servers":    []string{host}, // Tell the CLI to look at us for the login URLs
+			"client_id":                cfg.OAuthAudience,
+			"clientId":                 cfg.OAuthAudience,
 			"bearer_methods_supported": []string{"header"},
 		}
 
@@ -56,15 +56,15 @@ func HandleAuthServerDiscovery(cfg *config.Config) http.HandlerFunc {
 
 		// This is the RFC 8414 / OpenID Configuration the CLI is looking for
 		res := map[string]interface{}{
-			"issuer":                 host,
-			"authorization_endpoint": fmt.Sprintf("%s/authorize", host),
-			"token_endpoint":         fmt.Sprintf("%s/token", host),
-			"registration_endpoint":  fmt.Sprintf("%s/register", host), // Add this!
-			"jwks_uri":               cfg.OAuthJwksURL,
-			"response_types_supported":               []string{"code"},
-			"grant_types_supported":                  []string{"authorization_code", "refresh_token"},
-			"scopes_supported":                       []string{"openid", "email", "profile"},
-			"code_challenge_methods_supported":        []string{"S256"},
+			"issuer":                           host,
+			"authorization_endpoint":           fmt.Sprintf("%s/authorize", host),
+			"token_endpoint":                   fmt.Sprintf("%s/token", host),
+			"registration_endpoint":            fmt.Sprintf("%s/register", host), // Add this!
+			"jwks_uri":                         cfg.OAuthJwksURL,
+			"response_types_supported":         []string{"code"},
+			"grant_types_supported":            []string{"authorization_code", "refresh_token"},
+			"scopes_supported":                 []string{"openid", "email", "profile"},
+			"code_challenge_methods_supported": []string{"S256"},
 		}
 
 		if err := json.NewEncoder(w).Encode(res); err != nil {
@@ -96,8 +96,8 @@ func HandleRegistration(cfg *config.Config) http.HandlerFunc {
 			"client_id":                  cfg.OAuthAudience,
 			"client_id_issued_at":        0,
 			"client_secret_expires_at":   0,
-			"redirect_uris":             redirectURIs,
-			"scope":                     scope,
+			"redirect_uris":              redirectURIs,
+			"scope":                      scope,
 			"token_endpoint_auth_method": "none",
 		}
 
