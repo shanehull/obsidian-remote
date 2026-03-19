@@ -1,5 +1,9 @@
 # Obsidian Remote
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/shanehull/obsidian-remote)](https://goreportcard.com/report/github.com/shanehull/obsidian-remote)
+
+[![Lint](https://github.com/shanehull/obsidian-remote/actions/workflows/lint.yaml/badge.svg)](https://github.com/shanehull/obsidian-remote/actions/workflows/lint.yaml) [![Release](https://img.shields.io/github/v/release/shanehull/obsidian-remote)](https://github.com/shanehull/obsidian-remote/releases)
+
 A high-performance MCP server for your Obsidian vault, written in Go. This server acts as a bridge between MCP clients and the Obsidian [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api).
 
 ## Features
