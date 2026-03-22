@@ -31,19 +31,14 @@ This skill enables interaction with a remote Obsidian vault using the Model Cont
 
 ## CRITICAL: Behavioral Rules
 
-### Search Results Formatting
+### Show Content/Diff Before Modification (ALWAYS)
 
-The `global_search` tool returns raw JSON. You MUST format these results into a clean, human-readable Markdown list.
+You MUST display the content or diff in your response text **before invoking** any tool that modifies a note (`update_note`, `append_note`, `search_replace`). The user needs to see exactly what will be written before approving the tool call. **This is mandatory regardless of the size of the change.**
 
-- Group results by file.
-- Provide a brief context snippet for each match.
-- Use a concise summary if there are many matches.
+- **For `update_note` / `append_note`**: Display the full content or the block being written/appended.
+- **For `search_replace`**: Display the old and new text.
 
-### Show diffs for `search_replace`
-
-You MUST display the old and new text **in your response text before invoking** `search_replace`. The user needs to see the change before approving the tool call.
-
-Format:
+Format for `search_replace`:
 
 **Before:**
 
@@ -57,7 +52,9 @@ Format:
 (exact new text)
 ```
 
-If the replacement is large (>30 lines), summarise the key changes in a bullet list instead. Never skip the diff — the user will reject the call without it.
+Never skip this step — the user will reject the call without it.
+
+### Search Results Formatting
 
 ## Usage
 
