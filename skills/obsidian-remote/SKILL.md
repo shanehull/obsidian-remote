@@ -56,9 +56,17 @@ Never skip this step — the user will reject the call without it.
 
 ### Search Results Formatting
 
+Search results should be displayed in a readable manner, not in the raw JSON response format received.
+
+When presenting search results:
+- Extract and display the matched text snippets with context
+- Show the file path and line number for each match
+- Highlight the search term within the matched text if possible
+- Avoid dumping raw JSON — parse and present as structured text
+
 ## Usage
 
-Configure your MCP client to connect to the server's endpoint. Both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports are supported. 
+Configure your MCP client to connect to the server's endpoint. Both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports are supported.
 
 - **Streamable HTTP (Gemini CLI):** Use `httpUrl` (e.g., `https://<server-url>/mcp`).
 - **SSE (Cursor, Amp):** Use `url` (e.g., `https://<server-url>/sse`).
