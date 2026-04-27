@@ -7,7 +7,7 @@ allowed-tools: mcp__obsidian-remote__*
 
 # Obsidian Remote Skill
 
-This skill enables interaction with a remote Obsidian vault using the Model Context Protocol. The server is a Go bridge that translates MCP tool calls into HTTP requests for the Obsidian Local REST API.
+This skill enables interaction with a remote Obsidian vault via the Model Context Protocol.
 
 ## Tools
 
