@@ -31,12 +31,19 @@ This skill enables interaction with a remote Obsidian vault using the Model Cont
 
 ## CRITICAL: Behavioral Rules
 
-### Show Content/Diff Before Modification (ALWAYS)
+### Confirmation Required for All Write Actions
 
-You MUST display the content or diff in your response text **before invoking** any tool that modifies a note (`update_note`, `append_note`, `search_replace`). The user needs to see exactly what will be written before approving the tool call. **This is mandatory regardless of the size of the change.**
+Before invoking ANY tool that modifies a note (`update_note`, `append_note`, `delete_note`, `search_replace`), you MUST:
 
-- **For `update_note` / `append_note`**: Display the full content or the block being written/appended.
-- **For `search_replace`**: Display the old and new text.
+1. **Display the exact content or diff** in your response
+2. **Ask for explicit confirmation** from the user
+3. **WAIT** for the user to confirm before invoking the tool
+
+**For `update_note`**: AVOID when possible. Use `search_replace` instead for targeted changes. If `update_note` is necessary, display a diff (old vs new) by using `read_note` first, then show only changed lines.
+
+**For `append_note`**: Display only the block being appended.
+
+**For `search_replace`**: Display the old and new text.
 
 Format for `search_replace`:
 
@@ -52,13 +59,16 @@ Format for `search_replace`:
 (exact new text)
 ```
 
-Never skip this step — the user will reject the call without it.
+**Then ask:** "Proceed with this change?"
+
+**Never skip confirmation** — the user will reject the call without it. No exceptions, regardless of change size.
 
 ### Search Results Formatting
 
 Search results should be displayed in a readable manner, not in the raw JSON response format received.
 
 When presenting search results:
+
 - Extract and display the matched text snippets with context
 - Show the file path and line number for each match
 - Highlight the search term within the matched text if possible
