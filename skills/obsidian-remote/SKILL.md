@@ -33,7 +33,7 @@ This skill enables interaction with a remote Obsidian vault via the Model Contex
 
 ### Confirmation Required for All Write Actions
 
-Before invoking ANY tool that modifies a note (`update_note`, `append_note`, `delete_note`, `search_replace`), you MUST:
+Before invoking ANY tool that writes to a note (`update_note`, `append_note`, `delete_note`, `search_replace`), you MUST:
 
 1. **Display the exact content or diff** in your response
 2. **Ask for explicit confirmation** from the user
