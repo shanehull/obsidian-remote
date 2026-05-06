@@ -33,6 +33,7 @@ func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithDescription("List files in the vault"),
 		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		subDir := normalizePath(req.GetString("dirPath", ""))
 		res, err := client.Call("GET", "/vault/"+subDir, nil)
@@ -48,6 +49,7 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithDescription("Read a note"),
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
@@ -67,6 +69,7 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithDescription("Create or update a note"),
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithString("content", mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
@@ -91,6 +94,7 @@ func registerAppendNote(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithDescription("Append content to the end of an existing note"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content to append")),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
@@ -114,6 +118,7 @@ func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
 	s.AddTool(mcp.NewTool("delete_note",
 		mcp.WithDescription("Permanently delete a note from the vault"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note to delete")),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
@@ -134,6 +139,7 @@ func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithDescription("Search for text across all notes"),
 		mcp.WithString("query", mcp.Required()),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := req.RequireString("query")
 		if err != nil {
@@ -153,6 +159,7 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
 		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
@@ -196,6 +203,7 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("operation", mcp.Required(), mcp.Description("add or remove")),
 		mcp.WithString("tag", mcp.Required(), mcp.Description("Tag value (without leading #)")),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
@@ -285,6 +293,7 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithString("operation", mcp.Required(), mcp.Description("get or set")),
 		mcp.WithString("jsonPayload", mcp.Description("JSON object of keys to set (required for 'set')")),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
