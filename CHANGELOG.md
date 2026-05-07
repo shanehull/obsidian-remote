@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.3](https://github.com/shanehull/obsidian-remote/compare/v0.0.2...v0.0.3) (2026-05-06)
+
+
+### Bug Fixes
+
+* tool hints ([#9](https://github.com/shanehull/obsidian-remote/issues/9)) ([de64125](https://github.com/shanehull/obsidian-remote/commit/de64125b7713c851077981e0a59a8606bd85119e))
+
 ## [0.0.2](https://github.com/shanehull/obsidian-remote/compare/v0.0.1...v0.0.2) (2026-03-18)
 
 
