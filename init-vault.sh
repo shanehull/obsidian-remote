@@ -64,7 +64,7 @@ mkdir -p "$OBSIDIAN_CONFIG_DIR"
 CONFIG_CONTENT="{\"vaults\":{\"$VAULT_ID\":{\"path\":\"$VAULT_PATH\",\"ts\":$(date +%s%3N),\"open\":true,\"trusted\":true}},\"lastOpenedVault\":\"$VAULT_ID\"}"
 echo "$CONFIG_CONTENT" > "$OBSIDIAN_JSON"
 
-# 4. Permissions
+# 5. Permissions
 lsiown -R abc:abc /vaults "$OBSIDIAN_CONFIG_DIR"
 
 echo "**** Init complete. Headless Obsidian is ready. ****"
