@@ -24,9 +24,12 @@ COPY init-vault.sh /custom-cont-init.d/init-vault.sh
 COPY auto-trust.sh /usr/local/bin/auto-trust.sh
 RUN chmod +x /custom-cont-init.d/init-vault.sh /usr/local/bin/auto-trust.sh
 
+# Make the wrapper a no-op: s6 service handles launching (not autostart)
+RUN echo '#!/bin/bash' > /usr/bin/obsidian && chmod +x /usr/bin/obsidian
+
 # Create the Headless Obsidian Service (with remote debugging for auto-trust)
 RUN mkdir -p /etc/services.d/obsidian && \
-    printf "#!/usr/bin/with-contenv bash\nexport DISPLAY=:1\nexec s6-setuidgid abc /opt/obsidian/obsidian --no-sandbox --remote-debugging-port=9222 --remote-allow-origins=* /vaults\n" > /etc/services.d/obsidian/run && \
+    printf "#!/usr/bin/with-contenv bash\nexport DISPLAY=:0\nexec s6-setuidgid abc /opt/obsidian/obsidian --no-sandbox --remote-debugging-port=9222 --remote-allow-origins=* /vaults\n" > /etc/services.d/obsidian/run && \
     chmod +x /etc/services.d/obsidian/run
 
 # Create the MCP Bridge Service
