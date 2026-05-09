@@ -10,6 +10,11 @@ go build ./... && go vet ./... && golangci-lint run && go test ./...
 
 All unit tests, no vault needed.
 
+E2E tests (requires Docker, runs against a real Obsidian container):
+```bash
+test/e2e_test.sh
+```
+
 ## Conventions
 
-- Semantic commits for release-please: `feat:` bumps minor (pre-1.0), `fix:` bumps patch. `docs:`, `ci:`, `chore:` don't bump version but appear in changelog.
+- Semantic commits for release-please: `feat:` bumps minor (pre-1.0), `fix:` bumps patch. `docs:`, `ci:`, `chore:` don't bump version and don't appear in changelog.
