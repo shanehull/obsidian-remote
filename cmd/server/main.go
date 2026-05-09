@@ -76,6 +76,9 @@ func registerHTTPHandlers(mux *http.ServeMux, cfg *config.Config, sse *server.SS
 
 	// Dynamic Client Config
 	mux.HandleFunc("/config", handlers.HandleConfig(cfg))
+
+	// Health check (no auth required)
+	mux.HandleFunc("/healthz", handlers.HandleHealthz(cfg))
 }
 
 func enableCORS(h http.Handler) http.Handler {
