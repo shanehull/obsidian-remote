@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/shanehull/obsidian-remote/compare/v0.1.0...v0.2.0) (2026-05-09)
+
+
+### Features
+
+* add graceful shutdown on SIGINT/SIGTERM ([#21](https://github.com/shanehull/obsidian-remote/issues/21)) ([f173844](https://github.com/shanehull/obsidian-remote/commit/f1738449c6f52f0f78741cde66b14ca8467585f7))
+
 ## [0.1.0](https://github.com/shanehull/obsidian-remote/compare/v0.0.3...v0.1.0) (2026-05-09)
 
 
