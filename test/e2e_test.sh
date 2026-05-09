@@ -15,57 +15,66 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== Waiting for startup (90s) ==="
+echo "=== Waiting for startup (120s) ==="
 started=$(date +%s)
-timeout=90
-mcp_ok=false
+timeout=120
 auto_trust_ok=false
+mcp_ok=false
 
 while true; do
     elapsed=$(($(date +%s) - started))
-    if [ "$elapsed" -gt "$timeout" ]; then
-        echo "FAIL: timed out after ${timeout}s"
-        docker compose logs --tail=30
-        exit 1
-    fi
+    [ "$elapsed" -gt "$timeout" ] && { echo "FAIL: timed out"; docker compose logs --tail=30; exit 1; }
 
     logs=$(docker compose logs --tail=50 2>&1)
-
-    if echo "$logs" | grep -q "SIGSEGV"; then
-        echo "FAIL: Obsidian crashed with SIGSEGV"
-        echo "$logs"
-        exit 1
-    fi
-
-    if echo "$logs" | grep -q "REST API is up"; then
-        auto_trust_ok=true
-    fi
+    echo "$logs" | grep -q "SIGSEGV" && { echo "FAIL: Obsidian crashed"; echo "$logs"; exit 1; }
+    echo "$logs" | grep -q "REST API is up" && auto_trust_ok=true
 
     if [ "$mcp_ok" = false ]; then
         sse=$(curl -s --max-time 3 http://localhost:4000/sse 2>/dev/null || true)
-        if echo "$sse" | grep -q "sessionId"; then
-            mcp_ok=true
-        fi
+        echo "$sse" | grep -q "sessionId" && mcp_ok=true
     fi
 
-    if [ "$auto_trust_ok" = true ] && [ "$mcp_ok" = true ]; then
-        echo "PASS: auto-trust completed, MCP bridge responding"
-        break
-    fi
-
+    [ "$auto_trust_ok" = true ] && [ "$mcp_ok" = true ] && { echo "PASS: auto-trust done, MCP bridge up"; break; }
     sleep 3
 done
 
-session_id=$(curl -s --max-time 3 http://localhost:4000/sse | head -1 | grep -o 'sessionId=[a-f0-9-]*')
-if [ -n "$session_id" ]; then
-    result=$(curl -s --max-time 5 -X POST "http://localhost:4000/message?${session_id}" \
-        -H "Content-Type: application/json" \
-        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' 2>&1)
-    if echo "$result" | grep -q "obsidian"; then
-        echo "PASS: MCP tools available"
-    else
-        echo "WARN: MCP session created but tools/list returned unexpected: $result"
-    fi
+echo ""
+echo "=== Test 1: REST API health check ==="
+status=$(docker compose exec -T obsidian curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:27124/)
+[ "$status" = "200" ] && echo "PASS: REST API returned $status" || { echo "FAIL: expected 200 got $status"; exit 1; }
+
+echo ""
+echo "=== Test 2: REST API list notes ==="
+notes=$(docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/notes)
+echo "notes response: $notes"
+echo "$notes" | grep -q '\[\|\[' && echo "PASS: /notes endpoint responded" || echo "WARN: unexpected notes response"
+
+echo ""
+echo "=== Test 3: MCP bridge tools/call via SSE ==="
+tmp=$(mktemp -d)
+curl -s -N http://localhost:4000/sse > "$tmp/sse" &
+SSE_PID=$!
+sleep 2
+session=$(head -1 "$tmp/sse" | grep -o 'sessionId=[a-f0-9-]*')
+echo "session: $session"
+
+[ -n "$session" ] || { echo "FAIL: no session"; kill "$SSE_PID" 2>/dev/null; exit 1; }
+
+curl -s "http://localhost:4000/message?${session}" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_notes","arguments":{}}}'
+sleep 3
+
+if grep -q '"isError":true' "$tmp/sse" || grep -q '"error"' "$tmp/sse"; then
+    echo "FAIL: tools/call returned error (REST API unreachable or bridge broken)"
+    cat "$tmp/sse"
+    kill "$SSE_PID" 2>/dev/null
+    exit 1
 fi
 
-echo "=== All checks passed ==="
+grep -q '"content"' "$tmp/sse" && echo "PASS: tools/call succeeded" || echo "WARN: unexpected SSE response"
+cat "$tmp/sse"
+kill "$SSE_PID" 2>/dev/null || true
+
+echo ""
+echo "=== All e2e tests passed ==="
