@@ -54,20 +54,29 @@ while true; do
 done
 
 # ------------------------------------------------------------------
-# Test 1: REST API health check
+# Test 1: Bridge health check
 # ------------------------------------------------------------------
 echo ""
-echo "=== Test 1: REST API health ==="
+echo "=== Test 1: Bridge /healthz ==="
+code=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:4000/healthz)
+[ "$code" = "200" ] && echo "PASS: /healthz $code" \
+  || { echo "FAIL: /healthz $code"; exit 1; }
+
+# ------------------------------------------------------------------
+# Test 2: REST API health check
+# ------------------------------------------------------------------
+echo ""
+echo "=== Test 2: REST API health ==="
 code=$(docker compose exec -T obsidian \
   curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:27124/)
 [ "$code" = "200" ] && echo "PASS: REST API $code" \
   || { echo "FAIL: REST API $code"; exit 1; }
 
 # ------------------------------------------------------------------
-# Test 2: Create and read a note through the MCP bridge
+# Test 3: Create and read a note through the MCP bridge
 # ------------------------------------------------------------------
 echo ""
-echo "=== Test 2: Create and read note via MCP bridge ==="
+echo "=== Test 3: Create and read note via MCP bridge ==="
 
 # Open an MCP SSE session
 curl -s -N http://localhost:4000/sse > "$SSE_LOG" &

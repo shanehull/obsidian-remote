@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/shanehull/obsidian-remote/internal/config"
 )
@@ -168,5 +170,26 @@ func HandleConfig(cfg *config.Config) http.HandlerFunc {
 		if err := json.NewEncoder(w).Encode(res); err != nil {
 			slog.Error("failed to encode config response", "error", err)
 		}
+	}
+}
+
+func HandleHealthz(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		host := cfg.ObsidianURL
+		host = strings.TrimPrefix(host, "http://")
+		host = strings.TrimPrefix(host, "https://")
+
+		conn, err := net.DialTimeout("tcp", host, 500*time.Millisecond)
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unavailable"}`))
+			return
+		}
+		_ = conn.Close()
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}
 }
