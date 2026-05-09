@@ -8,7 +8,7 @@ COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -o server ./cmd/server/main.go
 
 # Stage 2: Unified Headless Container
-FROM lscr.io/linuxserver/obsidian:latest
+FROM lscr.io/linuxserver/obsidian:v1.12.7-ls127
 
 # Install runtime dependencies for the bridge and auto-trust
 RUN apt-get update && \
