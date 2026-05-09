@@ -19,7 +19,7 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 
 - Docker and Docker Compose.
 - A public URL (HTTPS) if accessing from outside your local network.
-- (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients like Gemini CLI and Cursor. Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
+- (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients (Claude Code, OpenCode, etc.). Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
 
 ## Resource Requirements
 
@@ -67,49 +67,42 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
 
 ## Client Configuration
 
-### Gemini CLI
+### Streamable HTTP (recommended)
 
-Add to your `~/.config/gemini/settings.json` (or `.gemini/settings.json` in the project):
-
-**Simple Configuration:**
+Connect to `/mcp`. OAuth endpoints are auto-discovered via `/.well-known/oauth-protected-resource`.
 
 ```json
 {
   "mcpServers": {
     "obsidian-remote": {
-      "httpUrl": "https://obsidian.yourdomain.com/mcp"
+      "url": "https://obsidian.yourdomain.com/mcp"
     }
   }
 }
 ```
 
-If `OAUTH_AUDIENCE` is configured on the server, Gemini will automatically discover the OAuth endpoints via `/.well-known/oauth-protected-resource` and handle authentication (no explicit oauth block needed). If you prefer explicit OAuth configuration or for some reason automatic discovery doesn't work, you can add:
+Claude Code: put this in `settings.json`.
 
-```json
+OpenCode uses a different format in `opencode.json`:
+
+```jsonc
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "obsidian-remote": {
-      "httpUrl": "https://obsidian.yourdomain.com/mcp",
-      "oauth": {
-        "clientId": "your-client-id.apps.googleusercontent.com",
-        "scopes": ["openid", "email", "profile"]
-      }
-    }
-  }
+      "type": "remote",
+      "url": "https://obsidian.yourdomain.com/mcp",
+      "enabled": true,
+    },
+  },
 }
 ```
 
-Then authenticate:
+If `OAUTH_AUDIENCE` is configured, clients auto-discover OAuth endpoints automatically. The server proxies the token exchange so clients never need the client secret.
 
-```
-/mcp auth obsidian-remote
-```
+### SSE Transport
 
-The server handles OAuth discovery automatically via `/.well-known/oauth-protected-resource` and proxies the token exchange so clients never need the client secret.
-
-### Other Clients (SSE)
-
-Clients that support the SSE transport can connect to `/sse` instead:
+Clients that support SSE can connect to `/sse`:
 
 ```json
 {
@@ -155,9 +148,8 @@ Write operations (`update`, `append`, `delete`, `search_replace`, `manage_frontm
 ```mermaid
 flowchart LR
     subgraph clients ["MCP Clients"]
-        gemini["Gemini CLI"]
-        cursor["Cursor"]
-        amp["Amp"]
+        claude["Claude Code"]
+        opencode["OpenCode"]
     end
 
     subgraph container ["Docker Container"]
