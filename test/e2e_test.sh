@@ -39,42 +39,49 @@ while true; do
 done
 
 echo ""
-echo "=== Test 1: REST API health check ==="
+echo "=== Test 1: Health check ==="
 status=$(docker compose exec -T obsidian curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:27124/)
 [ "$status" = "200" ] && echo "PASS: REST API returned $status" || { echo "FAIL: expected 200 got $status"; exit 1; }
 
 echo ""
-echo "=== Test 2: REST API list vault root ==="
-notes=$(docker compose exec -T obsidian curl -sf -H "Authorization: Bearer bridge-key" http://127.0.0.1:27124/vault/)
-echo "vault response: $notes"
-echo "$notes" | grep -qE 'files|".+' && echo "PASS: /vault/ endpoint responded" || echo "WARN: unexpected vault response"
-
-echo ""
-echo "=== Test 3: MCP bridge tools/call via SSE ==="
+echo "=== Test 2: Create and read note via MCP bridge ==="
 tmp=$(mktemp -d)
 curl -s -N http://localhost:4000/sse > "$tmp/sse" &
 SSE_PID=$!
 sleep 2
 session=$(grep -o 'sessionId=[a-f0-9-]*' "$tmp/sse" | head -1)
+[ -n "$session" ] || { echo "FAIL: no sessionId"; kill "$SSE_PID" 2>/dev/null; exit 1; }
 echo "sessionId: $session"
 
-[ -n "$session" ] || { echo "FAIL: no session"; kill "$SSE_PID" 2>/dev/null; exit 1; }
-
+echo "--- Create via update_note ---"
+: > "$tmp/sse"
 curl -s "http://localhost:4000/message?${session}" \
     -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_notes","arguments":{}}}'
-sleep 3
-
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_note","arguments":{"path":"e2e-bridge.md","content":"# Bridge E2E\n\nCreated through MCP."}}}'
+sleep 2
 if grep -q '"isError":true' "$tmp/sse" || grep -q '"error"' "$tmp/sse"; then
-    echo "FAIL: tools/call returned error (REST API unreachable or bridge broken)"
-    cat "$tmp/sse"
-    kill "$SSE_PID" 2>/dev/null
-    exit 1
+    echo "FAIL: update_note failed"; cat "$tmp/sse"; kill "$SSE_PID" 2>/dev/null; exit 1
 fi
+echo "PASS: update_note succeeded"
 
-grep -q '"content"' "$tmp/sse" && echo "PASS: tools/call succeeded" || echo "WARN: unexpected SSE response"
+echo "--- Read via read_note ---"
+: > "$tmp/sse"
+curl -s "http://localhost:4000/message?${session}" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"e2e-bridge.md"}}}'
+sleep 3
+if grep -q '"isError":true' "$tmp/sse" || grep -q '"error"' "$tmp/sse"; then
+    echo "FAIL: read_note failed"; cat "$tmp/sse"; kill "$SSE_PID" 2>/dev/null; exit 1
+fi
+grep -q "Bridge E2E" "$tmp/sse" && echo "PASS: content verified" || { echo "FAIL: content mismatch"; cat "$tmp/sse"; kill "$SSE_PID" 2>/dev/null; exit 1; }
 cat "$tmp/sse"
 kill "$SSE_PID" 2>/dev/null || true
+
+echo "--- Cleanup ---"
+docker compose exec -T obsidian curl -sf -X DELETE \
+    -H "Authorization: Bearer bridge-key" \
+    http://127.0.0.1:27124/vault/e2e-bridge.md > /dev/null
+echo "PASS: cleanup done"
 
 echo ""
 echo "=== All e2e tests passed ==="
