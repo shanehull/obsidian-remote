@@ -197,6 +197,39 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 	})
 }
 
+func normalizeTags(tags []string) []string {
+	result := make([]string, 0, len(tags))
+	for _, t := range tags {
+		result = append(result, strings.TrimPrefix(t, "#"))
+	}
+	return result
+}
+
+func addTagToSlice(tags []string, tag string) ([]string, bool) {
+	for _, t := range tags {
+		if t == tag {
+			return tags, false
+		}
+	}
+	return append(tags, tag), true
+}
+
+func removeTagFromSlice(tags []string, tag string) ([]string, bool) {
+	found := false
+	filtered := tags[:0]
+	for _, t := range tags {
+		if t == tag {
+			found = true
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+	if !found {
+		return tags, false
+	}
+	return filtered, true
+}
+
 func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 	s.AddTool(mcp.NewTool("manage_tags",
 		mcp.WithDescription("Add or remove tags from a note's frontmatter"),
@@ -238,36 +271,26 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError("failed to parse note metadata: " + jsonErr.Error()), nil
 		}
 
-		var tags []string
-		for _, t := range note.Tags {
-			tags = append(tags, strings.TrimPrefix(t, "#"))
-		}
+		tags := normalizeTags(note.Tags)
 
+		var ok bool
 		switch op {
 		case "add":
-			for _, t := range tags {
-				if t == tag {
-					return mcp.NewToolResultText(fmt.Sprintf("Tag '%s' already exists in %s", tag, path)), nil
-				}
+			tags, ok = addTagToSlice(tags, tag)
+			if !ok {
+				return mcp.NewToolResultText(fmt.Sprintf("Tag '%s' already exists in %s", tag, path)), nil
 			}
-			tags = append(tags, tag)
 		case "remove":
-			found := false
-			filtered := tags[:0]
-			for _, t := range tags {
-				if t == tag {
-					found = true
-					continue
-				}
-				filtered = append(filtered, t)
-			}
-			if !found {
+			tags, ok = removeTagFromSlice(tags, tag)
+			if !ok {
 				return mcp.NewToolResultError(fmt.Sprintf("Tag '%s' not found in %s", tag, path)), nil
 			}
-			tags = filtered
 		}
 
-		tagsJSON, _ := json.Marshal(tags)
+		tagsJSON, err := json.Marshal(tags)
+		if err != nil {
+			return mcp.NewToolResultError("failed to marshal tags: " + err.Error()), nil
+		}
 		if _, err := client.Call("PATCH", "/vault/"+path, tagsJSON,
 			map[string]string{
 				"Content-Type":             "application/json",
@@ -328,7 +351,11 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 
 			var errs []string
 			for k, v := range kvs {
-				b, _ := json.Marshal(v)
+				b, marshalErr := json.Marshal(v)
+				if marshalErr != nil {
+					errs = append(errs, k+": failed to marshal value: "+marshalErr.Error())
+					continue
+				}
 				_, patchErr := client.Call("PATCH", "/vault/"+path, b,
 					map[string]string{
 						"Content-Type":             "application/json",

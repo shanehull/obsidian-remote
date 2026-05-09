@@ -81,7 +81,9 @@ func HandleRegistration(cfg *config.Config) http.HandlerFunc {
 
 		var req map[string]interface{}
 		if r.Body != nil {
-			_ = json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				slog.Warn("registration: failed to decode body", "error", err)
+			}
 		}
 
 		redirectURIs, _ := req["redirect_uris"].([]interface{})
