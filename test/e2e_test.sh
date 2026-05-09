@@ -44,10 +44,10 @@ status=$(docker compose exec -T obsidian curl -sf -o /dev/null -w "%{http_code}"
 [ "$status" = "200" ] && echo "PASS: REST API returned $status" || { echo "FAIL: expected 200 got $status"; exit 1; }
 
 echo ""
-echo "=== Test 2: REST API list notes ==="
-notes=$(docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/notes)
-echo "notes response: $notes"
-echo "$notes" | grep -q '\[\|\[' && echo "PASS: /notes endpoint responded" || echo "WARN: unexpected notes response"
+echo "=== Test 2: REST API list vault root ==="
+notes=$(docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/vault/)
+echo "vault response: $notes"
+echo "$notes" | grep -qE '\.obsidian|".+' && echo "PASS: /vault/ endpoint responded" || echo "WARN: unexpected vault response"
 
 echo ""
 echo "=== Test 3: MCP bridge tools/call via SSE ==="

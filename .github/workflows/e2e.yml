@@ -47,8 +47,8 @@ jobs:
           docker compose exec -T obsidian curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:27124/
           echo ""
 
-          echo "=== REST API list notes ==="
-          docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/notes
+          echo "=== REST API list vault root ==="
+          docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/vault/
           echo ""
 
       - name: Test MCP bridge via tools/call
