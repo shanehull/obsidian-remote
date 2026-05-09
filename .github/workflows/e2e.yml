@@ -48,7 +48,7 @@ jobs:
           echo ""
 
           echo "=== REST API list vault root ==="
-          docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/vault/
+          docker compose exec -T obsidian curl -sf -H "Authorization: Bearer bridge-key" http://127.0.0.1:27124/vault/
           echo ""
 
       - name: Test MCP bridge via tools/call
@@ -58,8 +58,8 @@ jobs:
           curl -s -N http://localhost:4000/sse > "$tmp/sse" &
           SSE_PID=$!
           sleep 2
-          session=$(head -1 "$tmp/sse" | grep -o 'sessionId=[a-f0-9-]*')
-          echo "session: $session"
+          session=$(grep -o 'sessionId=[a-f0-9-]*' "$tmp/sse" | head -1)
+          echo "sessionId: $session"
 
           # Call a tool that hits the REST API
           curl -s "http://localhost:4000/message?${session}" \

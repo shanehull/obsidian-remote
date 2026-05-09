@@ -45,9 +45,9 @@ status=$(docker compose exec -T obsidian curl -sf -o /dev/null -w "%{http_code}"
 
 echo ""
 echo "=== Test 2: REST API list vault root ==="
-notes=$(docker compose exec -T obsidian curl -sf http://127.0.0.1:27124/vault/)
+notes=$(docker compose exec -T obsidian curl -sf -H "Authorization: Bearer bridge-key" http://127.0.0.1:27124/vault/)
 echo "vault response: $notes"
-echo "$notes" | grep -qE '\.obsidian|".+' && echo "PASS: /vault/ endpoint responded" || echo "WARN: unexpected vault response"
+echo "$notes" | grep -qE 'files|".+' && echo "PASS: /vault/ endpoint responded" || echo "WARN: unexpected vault response"
 
 echo ""
 echo "=== Test 3: MCP bridge tools/call via SSE ==="
@@ -55,8 +55,8 @@ tmp=$(mktemp -d)
 curl -s -N http://localhost:4000/sse > "$tmp/sse" &
 SSE_PID=$!
 sleep 2
-session=$(head -1 "$tmp/sse" | grep -o 'sessionId=[a-f0-9-]*')
-echo "session: $session"
+session=$(grep -o 'sessionId=[a-f0-9-]*' "$tmp/sse" | head -1)
+echo "sessionId: $session"
 
 [ -n "$session" ] || { echo "FAIL: no session"; kill "$SSE_PID" 2>/dev/null; exit 1; }
 
