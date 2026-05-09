@@ -8,7 +8,7 @@ COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -o server ./cmd/server/main.go
 
 # Stage 2: Unified Headless Container
-FROM lscr.io/linuxserver/obsidian:latest
+FROM lscr.io/linuxserver/obsidian:v1.12.7-ls127
 
 # Install runtime dependencies for the bridge and auto-trust
 RUN apt-get update && \
@@ -28,8 +28,12 @@ RUN chmod +x /custom-cont-init.d/init-vault.sh /usr/local/bin/auto-trust.sh
 RUN echo '#!/bin/bash' > /usr/bin/obsidian && chmod +x /usr/bin/obsidian
 
 # Create the Headless Obsidian Service (with remote debugging for auto-trust)
+# Waits for the Wayland socket before launching to avoid a race between
+# this service and the desktop environment service (svc-de) that starts
+# the Wayland compositor. Without this wait, Obsidian/Electron may fail
+# to initialize its CDP server in CI environments where startup is slower.
 RUN mkdir -p /etc/services.d/obsidian && \
-    printf "#!/usr/bin/with-contenv bash\nexport DISPLAY=:0\nexec s6-setuidgid abc /opt/obsidian/obsidian --no-sandbox --remote-debugging-port=9222 --remote-allow-origins=* /vaults\n" > /etc/services.d/obsidian/run && \
+    printf "#!/usr/bin/with-contenv bash\nfor i in \$(seq 1 30); do\n    [ -e \"/config/.XDG/wayland-1\" ] && break\n    sleep 1\ndone\nexport DISPLAY=:0\nexec s6-setuidgid abc /opt/obsidian/obsidian --no-sandbox --remote-debugging-port=9222 --remote-allow-origins=* /vaults\n" > /etc/services.d/obsidian/run && \
     chmod +x /etc/services.d/obsidian/run
 
 # Create the MCP Bridge Service
