@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.0](https://github.com/shanehull/obsidian-remote/compare/v0.0.3...v0.1.0) (2026-05-09)
+
+
+### Features
+
+* add /healthz endpoint to MCP bridge ([#16](https://github.com/shanehull/obsidian-remote/issues/16)) ([eda882d](https://github.com/shanehull/obsidian-remote/commit/eda882d3dd4856bf4ce448363b361dfcdf70b7a5))
+
+
+### Bug Fixes
+
+* pin base image to v1.12.7-ls127 and add e2e tests ([#15](https://github.com/shanehull/obsidian-remote/issues/15)) ([ea21b41](https://github.com/shanehull/obsidian-remote/commit/ea21b41f7c54b21a588a9d6915e9e89b59a63f47))
+* resolve goreportcard issues, add tests, and bump CI actions ([#17](https://github.com/shanehull/obsidian-remote/issues/17)) ([9b4ff9f](https://github.com/shanehull/obsidian-remote/commit/9b4ff9ff4225430fe78f1df3bc1ce2e5eea9b4e8))
+* set correct display port and prevent duplicate obsidian launch ([#11](https://github.com/shanehull/obsidian-remote/issues/11)) ([de1b19a](https://github.com/shanehull/obsidian-remote/commit/de1b19a7984b05ef248b1cdfa60c423bf92accf2))
+
 ## [0.0.3](https://github.com/shanehull/obsidian-remote/compare/v0.0.2...v0.0.3) (2026-05-06)
 
 
