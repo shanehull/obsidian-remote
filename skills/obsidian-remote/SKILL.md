@@ -1,6 +1,6 @@
 ---
 name: obsidian-remote
-description: Manage a remote Obsidian vault via MCP.
+description: Manage an Obsidian vault — read, search, create, update, and delete notes with metadata tagging and full-text search. Use this skill when the user wants to interact with their Obsidian vault content, even if they don't explicitly say Obsidian or vault.
 compatibility: Requires Obsidian Remote container with MCP enabled.
 allowed-tools: mcp__obsidian-remote__*
 ---
