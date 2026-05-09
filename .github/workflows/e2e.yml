@@ -1,0 +1,22 @@
+name: e2e
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - cmd/**
+      - internal/**
+      - auto-trust.sh
+      - init-vault.sh
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run e2e tests
+        run: test/e2e_test.sh
