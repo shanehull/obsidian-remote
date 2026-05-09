@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/MicahParks/keyfunc/v2"
@@ -49,11 +52,27 @@ func main() {
 	// Wrap with CORS and Request Logger
 	handler := loggingMiddleware(enableCORS(mux))
 
-	slog.Info("Headless MCP Bridge starting", "port", 4000)
-	if err := http.ListenAndServe(":4000", handler); err != nil {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
+	srv := &http.Server{Addr: ":4000", Handler: handler}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		slog.Info("Headless MCP Bridge starting", "port", 4000)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("forced shutdown", "error", err)
 	}
+	slog.Info("server stopped")
 }
 
 func registerHTTPHandlers(mux *http.ServeMux, cfg *config.Config, sse *server.SSEServer, streamable *server.StreamableHTTPServer, auth func(http.Handler) http.Handler) {
