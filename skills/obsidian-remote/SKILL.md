@@ -11,6 +11,20 @@ This skill enables interaction with a remote Obsidian vault via the Model Contex
 
 ## Tools
 
+Destructive Hint Annotation (true = modifies vault, false = read-only):
+
+| Tool                 | Destructive |
+| -------------------- | ----------- |
+| `list_notes`         | No          |
+| `read_note`          | No          |
+| `global_search`      | No          |
+| `update_note`        | Yes         |
+| `append_note`        | Yes         |
+| `delete_note`        | Yes         |
+| `search_replace`     | Yes         |
+| `manage_frontmatter` | Yes         |
+| `manage_tags`        | Yes         |
+
 ### Note Management
 
 - `read_note`: Retrieve note content and metadata.
@@ -22,7 +36,7 @@ This skill enables interaction with a remote Obsidian vault via the Model Contex
 ### Search
 
 - `global_search`: Search for text or regex across the vault.
-- `search_replace`: Perform search-and-replace within a note.
+- `search_replace`: Search and replace within a note. Accepts an optional `count` parameter (default: `1`, first occurrence only; set to `-1` to replace all).
 
 ### Metadata
 
@@ -30,6 +44,10 @@ This skill enables interaction with a remote Obsidian vault via the Model Contex
 - `manage_tags`: Add or remove tags.
 
 ## CRITICAL: Behavioral Rules
+
+### Exclusive Write Path — Never Mix with Local Tools
+
+The obsidian-remote server serves the same git repo as the local filesystem. Use **only** the `obsidian-remote` tools (`*_note`, `search_replace`, etc.) for all vault writes — never use local `edit`/`write`/`bash` tools to modify vault files. Switching between write paths on the same file creates git conflicts.
 
 ### Confirmation Required for All Write Actions
 
