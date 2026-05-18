@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/shanehull/obsidian-remote/compare/v0.2.0...v0.3.0) (2026-05-18)
+
+
+### Features
+
+* add count parameter to search_replace for occurrence control ([#23](https://github.com/shanehull/obsidian-remote/issues/23)) ([e06ee65](https://github.com/shanehull/obsidian-remote/commit/e06ee658fbc989d8655dacfaaa04a6d011fcecd8))
+
 ## [0.2.0](https://github.com/shanehull/obsidian-remote/compare/v0.1.0...v0.2.0) (2026-05-09)
 
 
