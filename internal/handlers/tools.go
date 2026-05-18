@@ -159,6 +159,7 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
 		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
 		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
+		mcp.WithNumber("count", mcp.Description("Maximum occurrences to replace (default: 1, set to -1 for all)")),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -175,6 +176,7 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		count := req.GetInt("count", 1)
 
 		content, err := client.Call("GET", "/vault/"+path, nil)
 		if err != nil {
@@ -186,14 +188,18 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError("search text not found in note"), nil
 		}
 
-		updated := strings.ReplaceAll(original, search, replace)
-		count := strings.Count(original, search)
+		updated := strings.Replace(original, search, replace, count)
+
+		replaced := count
+		if count < 0 {
+			replaced = strings.Count(original, search)
+		}
 
 		if _, err := client.Call("PUT", "/vault/"+path, []byte(updated)); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", count, path)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", replaced, path)), nil
 	})
 }
 
