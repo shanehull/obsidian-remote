@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/shanehull/obsidian-remote/compare/v0.3.0...v1.0.0) (2026-05-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* append_note removed. Use update_note with operation=append.
+
+### Features
+
+* add section targeting to read_note and update_note, remove append_note ([#25](https://github.com/shanehull/obsidian-remote/issues/25)) ([6b75515](https://github.com/shanehull/obsidian-remote/commit/6b75515b37921742401d1d6827304471f5ac999a))
+
+
+### Bug Fixes
+
+* add PATCH to vault content-type detection ([#28](https://github.com/shanehull/obsidian-remote/issues/28)) ([020104d](https://github.com/shanehull/obsidian-remote/commit/020104d60a936409398aa2a999fb3accd33df229))
+
 ## [0.3.0](https://github.com/shanehull/obsidian-remote/compare/v0.2.0...v0.3.0) (2026-05-18)
 
 
