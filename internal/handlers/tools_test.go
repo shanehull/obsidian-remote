@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func TestNormalizeTags(t *testing.T) {
@@ -93,6 +95,92 @@ func TestRemoveTagFromSlice(t *testing.T) {
 						t.Fatalf("removeTagFromSlice(%v, %q) = %v, tag still present", tt.tags, tt.tag, result)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestBuildTargetHeaders(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     map[string]any
+		wantNil  bool
+		wantErr  bool
+		wantType string
+		wantTarg string
+		wantScop string
+		wantDel  string
+		wantCrea string
+		wantReje string
+		wantTrim string
+	}{
+		{"no_targeting", map[string]any{}, true, false, "", "", "", "", "", "", ""},
+		{"heading_target", map[string]any{
+			"target_type": "heading", "target": "My Section",
+		}, false, false, "heading", "My Section", "", "", "", "", ""},
+		{"with_scope", map[string]any{
+			"target_type": "heading", "target": "Heading", "target_scope": "content",
+		}, false, false, "heading", "Heading", "content", "", "", "", ""},
+		{"with_delimiter", map[string]any{
+			"target_type": "heading", "target": "H1::H2", "target_delimiter": "::",
+		}, false, false, "heading", "H1::H2", "", "::", "", "", ""},
+		{"with_create_if_missing", map[string]any{
+			"target_type": "heading", "target": "H", "create_target_if_missing": "true",
+		}, false, false, "heading", "H", "", "", "true", "", ""},
+		{"with_reject", map[string]any{
+			"target_type": "heading", "target": "H", "reject_if_content_preexists": "true",
+		}, false, false, "heading", "H", "", "", "", "true", ""},
+		{"with_trim", map[string]any{
+			"target_type": "heading", "target": "H", "trim_target_whitespace": "true",
+		}, false, false, "heading", "H", "", "", "", "", "true"},
+		{"missing_target", map[string]any{"target_type": "heading"}, false, true, "", "", "", "", "", "", ""},
+		{"missing_target_type", map[string]any{"target": "H"}, false, true, "", "", "", "", "", "", ""},
+		{"invalid_target_type", map[string]any{
+			"target_type": "invalid", "target": "H",
+		}, false, true, "", "", "", "", "", "", ""},
+		{"invalid_scope", map[string]any{
+			"target_type": "heading", "target": "H", "target_scope": "bad",
+		}, false, true, "", "", "", "", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: tt.args}}
+			headers, err := buildTargetHeaders(req)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %v", tt.args)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantNil {
+				if headers != nil {
+					t.Fatalf("expected nil headers, got %v", headers)
+				}
+				return
+			}
+			if headers["Target-Type"] != tt.wantType {
+				t.Fatalf("Target-Type = %q, want %q", headers["Target-Type"], tt.wantType)
+			}
+			if headers["Target"] != tt.wantTarg {
+				t.Fatalf("Target = %q, want %q", headers["Target"], tt.wantTarg)
+			}
+			if tt.wantScop != "" && headers["Target-Scope"] != tt.wantScop {
+				t.Fatalf("Target-Scope = %q, want %q", headers["Target-Scope"], tt.wantScop)
+			}
+			if tt.wantDel != "" && headers["Target-Delimiter"] != tt.wantDel {
+				t.Fatalf("Target-Delimiter = %q, want %q", headers["Target-Delimiter"], tt.wantDel)
+			}
+			if tt.wantCrea != "" && headers["Create-Target-If-Missing"] != tt.wantCrea {
+				t.Fatalf("Create-Target-If-Missing = %q, want %q", headers["Create-Target-If-Missing"], tt.wantCrea)
+			}
+			if tt.wantReje != "" && headers["Reject-If-Content-Preexists"] != tt.wantReje {
+				t.Fatalf("Reject-If-Content-Preexists = %q, want %q", headers["Reject-If-Content-Preexists"], tt.wantReje)
+			}
+			if tt.wantTrim != "" && headers["Trim-Target-Whitespace"] != tt.wantTrim {
+				t.Fatalf("Trim-Target-Whitespace = %q, want %q", headers["Trim-Target-Whitespace"], tt.wantTrim)
 			}
 		})
 	}
