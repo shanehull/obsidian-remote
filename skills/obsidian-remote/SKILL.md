@@ -1,102 +1,107 @@
 ---
 name: obsidian-remote
-description: Manage an Obsidian vault — read, search, create, update, and delete notes with metadata tagging and full-text search. Use this skill when the user wants to interact with their Obsidian vault content, even if they don't explicitly say Obsidian or vault.
+description: Read, write, and search an Obsidian vault — surgically target specific headings, blocks, or frontmatter fields in notes without reading full files. Use this skill when the user wants to interact with their notes or vault, even if they don't name Obsidian.
 compatibility: Requires Obsidian Remote container with MCP enabled.
 allowed-tools: mcp__obsidian-remote__*
 ---
 
-# Obsidian Remote Skill
+## Gotchas
 
-This skill enables interaction with a remote Obsidian vault via the Model Context Protocol.
+- **`prepend` requires a target** — you cannot prepend to an entire file. Use `operation=append` with no target to add content at the end.
+- **`target_type` and `target` are a pair** — providing one without the other is an error.
+- **`target_scope` only applies to `heading` and `block`** — it is ignored for `frontmatter` targets.
+- **Boolean params are strings** — `create_target_if_missing`, `reject_if_content_preexists`, and `trim_target_whitespace` expect `"true"` (a string), not `true` (a boolean).
+- **Nested headings use `::`** — target `"Projects::Active"` not `"Projects/Active"` or `"Projects > Active"`.
+- **`search_replace` count defaults to `1`** — only the first occurrence is replaced unless you set `count` to `-1`.
 
 ## Tools
 
-Destructive Hint Annotation (true = modifies vault, false = read-only):
+| Tool                 | Writes? |
+| -------------------- | ------- |
+| `list_notes`         | No      |
+| `read_note`          | No      |
+| `global_search`      | No      |
+| `update_note`        | Yes     |
+| `delete_note`        | Yes     |
+| `search_replace`     | Yes     |
+| `manage_frontmatter` | Yes     |
+| `manage_tags`        | Yes     |
 
-| Tool                 | Destructive |
-| -------------------- | ----------- |
-| `list_notes`         | No          |
-| `read_note`          | No          |
-| `global_search`      | No          |
-| `update_note`        | Yes         |
-| `append_note`        | Yes         |
-| `delete_note`        | Yes         |
-| `search_replace`     | Yes         |
-| `manage_frontmatter` | Yes         |
-| `manage_tags`        | Yes         |
+### `read_note`
 
-### Note Management
+Read all or part of a note.
 
-- `read_note`: Retrieve note content and metadata.
-- `update_note`: Create or overwrite notes.
-- `append_note`: Append content to the end of an existing note.
-- `delete_note`: Permanently delete a note.
-- `list_notes`: List files and folders.
+| Parameter          | Values                                            |
+| ------------------ | ------------------------------------------------- |
+| `target_type`      | `heading`, `block`, or `frontmatter`              |
+| `target`           | Heading text, block ref, or frontmatter key       |
+| `target_scope`     | `content` (default), `marker`, `markerAndContent` |
+| `target_delimiter` | Default `::` — separates nested heading levels    |
 
-### Search
+Omit target params to read the full note. Nest headings with `::`, e.g. `"Section::Subsection"`.
 
-- `global_search`: Search for text or regex across the vault.
-- `search_replace`: Search and replace within a note. Accepts an optional `count` parameter (default: `1`, first occurrence only; set to `-1` to replace all).
+### `update_note`
 
-### Metadata
+Create, overwrite, append, or prepend content within a note.
 
-- `manage_frontmatter`: Atomic YAML key management.
-- `manage_tags`: Add or remove tags.
+| Parameter                     | Values                                            |
+| ----------------------------- | ------------------------------------------------- |
+| `operation`                   | `replace` (default), `append`, or `prepend`       |
+| `target_type`                 | `heading`, `block`, or `frontmatter`              |
+| `target`                      | Heading text, block ref, or frontmatter key       |
+| `target_scope`                | `content` (default), `marker`, `markerAndContent` |
+| `target_delimiter`            | Default `::`                                      |
+| `create_target_if_missing`    | `"true"` to create target if absent               |
+| `reject_if_content_preexists` | `"true"` to reject if target has content          |
+| `trim_target_whitespace`      | `"true"` to trim whitespace before operation      |
 
-## CRITICAL: Behavioral Rules
+Behavior by combination:
 
-### Exclusive Write Path — Never Mix with Local Tools
+| Operation | Target? | Result                                      |
+| --------- | ------- | ------------------------------------------- |
+| `replace` | No      | Overwrites the entire file.                 |
+| `replace` | Yes     | Replaces only the target section's content. |
+| `append`  | No      | Appends to end of file.                     |
+| `append`  | Yes     | Appends within the target section.          |
+| `prepend` | No      | **Error** — requires a target.              |
+| `prepend` | Yes     | Prepends within the target section.         |
 
-The obsidian-remote server serves the same git repo as the local filesystem. Use **only** the `obsidian-remote` tools (`*_note`, `search_replace`, etc.) for all vault writes — never use local `edit`/`write`/`bash` tools to modify vault files. Switching between write paths on the same file creates git conflicts.
+### `search_replace`
 
-### Confirmation Required for All Write Actions
+| Parameter | Description                                  |
+| --------- | -------------------------------------------- |
+| `count`   | Default `1` (first occurrence), `-1` for all |
 
-Before invoking ANY tool that writes to a note (`update_note`, `append_note`, `delete_note`, `search_replace`), you MUST:
+### `manage_frontmatter`
 
-1. **Display the exact content or diff** in your response
-2. **Ask for explicit confirmation** from the user
-3. **WAIT** for the user to confirm before invoking the tool
+| Parameter     | Values                |
+| ------------- | --------------------- |
+| `operation`   | `get` or `set`        |
+| `jsonPayload` | JSON object for `set` |
 
-**For `update_note`**: AVOID when possible. Use `search_replace` instead for targeted changes. If `update_note` is necessary, display a diff (old vs new) by using `read_note` first, then show only changed lines.
+### `manage_tags`
 
-**For `append_note`**: Display only the block being appended.
+| Parameter   | Values                        |
+| ----------- | ----------------------------- |
+| `operation` | `add` or `remove`             |
+| `tag`       | Tag value without leading `#` |
 
-**For `search_replace`**: Display the old and new text.
+## Behavioral Rules
 
-Format for `search_replace`:
+### Exclusive Write Path
 
-**Before:**
+Use **only** `obsidian-remote` tools for vault writes — never local `edit`/`write`/`bash`. Mixing paths on the same file creates git conflicts.
 
-```markdown
-(exact old text)
-```
+### Confirmation Required
 
-**After:**
+Before any write (`update_note`, `delete_note`, `search_replace`):
 
-```markdown
-(exact new text)
-```
+1. Show the exact content or diff.
+2. Ask for explicit confirmation.
+3. Wait for the user to confirm.
 
-**Then ask:** "Proceed with this change?"
+- **`update_note` replace**: Show old vs new via `read_note` with same target, then diffs.
+- **`update_note` append/prepend**: Show the block being inserted.
+- **`search_replace`**: Show old and new text in "Before/After" format.
 
-**Never skip confirmation** — the user will reject the call without it. No exceptions, regardless of change size.
-
-### Search Results Formatting
-
-Search results should be displayed in a readable manner, not in the raw JSON response format received.
-
-When presenting search results:
-
-- Extract and display the matched text snippets with context
-- Show the file path and line number for each match
-- Highlight the search term within the matched text if possible
-- Avoid dumping raw JSON — parse and present as structured text
-
-## Usage
-
-Configure your MCP client to connect to the server's endpoint. Both Streamable HTTP (`/mcp`) and SSE (`/sse`) transports are supported.
-
-- **Streamable HTTP (Gemini CLI):** Use `httpUrl` (e.g., `https://<server-url>/mcp`).
-- **SSE (Cursor, Amp):** Use `url` (e.g., `https://<server-url>/sse`).
-
-See `references/mcp-setup.md` for client-specific examples.
+Never skip confirmation. No exceptions.

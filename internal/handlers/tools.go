@@ -16,7 +16,6 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerListNotes(s, client)
 	registerReadNote(s, client)
 	registerUpdateNote(s, client)
-	registerAppendNote(s, client)
 	registerDeleteNote(s, client)
 	registerGlobalSearch(s, client)
 	registerSearchReplace(s, client)
@@ -48,6 +47,10 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 	s.AddTool(mcp.NewTool("read_note",
 		mcp.WithDescription("Read a note"),
 		mcp.WithString("path", mcp.Required()),
+		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
+		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
+		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
+		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -56,7 +59,12 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		path = normalizePath(path)
-		res, err := client.Call("GET", "/vault/"+path, nil)
+
+		headers, headerErr := buildTargetHeaders(req)
+		if headerErr != nil {
+			return mcp.NewToolResultError(headerErr.Error()), nil
+		}
+		res, err := client.Call("GET", "/vault/"+path, nil, headers)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -64,36 +72,56 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 	})
 }
 
-func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("update_note",
-		mcp.WithDescription("Create or update a note"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("content", mcp.Required()),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
+	targetType := req.GetString("target_type", "")
+	target := req.GetString("target", "")
+	if targetType == "" && target == "" {
+		return nil, nil
+	}
+	if targetType == "" || target == "" {
+		return nil, fmt.Errorf("both target_type and target are required when targeting a section")
+	}
+	if targetType != "heading" && targetType != "block" && targetType != "frontmatter" {
+		return nil, fmt.Errorf("target_type must be 'heading', 'block', or 'frontmatter'")
+	}
+	headers := map[string]string{
+		"Target-Type": targetType,
+		"Target":      target,
+	}
+	if scope := req.GetString("target_scope", ""); scope != "" {
+		if scope != "content" && scope != "marker" && scope != "markerAndContent" {
+			return nil, fmt.Errorf("target_scope must be 'content', 'marker', or 'markerAndContent'")
 		}
-		path = normalizePath(path)
-		content, err := req.RequireString("content")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		_, err = client.Call("PUT", "/vault/"+path, []byte(content))
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully updated note: %s", path)), nil
-	})
+		headers["Target-Scope"] = scope
+	}
+	if delimiter := req.GetString("target_delimiter", ""); delimiter != "" {
+		headers["Target-Delimiter"] = delimiter
+	}
+	if req.GetString("create_target_if_missing", "") == "true" {
+		headers["Create-Target-If-Missing"] = "true"
+	}
+	if req.GetString("reject_if_content_preexists", "") == "true" {
+		headers["Reject-If-Content-Preexists"] = "true"
+	}
+	if req.GetString("trim_target_whitespace", "") == "true" {
+		headers["Trim-Target-Whitespace"] = "true"
+	}
+	return headers, nil
 }
 
-func registerAppendNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("append_note",
-		mcp.WithDescription("Append content to the end of an existing note"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
-		mcp.WithString("content", mcp.Required(), mcp.Description("Content to append")),
+func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("update_note",
+		mcp.WithDescription("Create, update, or append content within a note"),
+		mcp.WithString("path", mcp.Required()),
+		mcp.WithString("content", mcp.Required()),
+		mcp.WithString("operation", mcp.Description("replace (default), append, or prepend")),
+		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
+		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
+		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
+		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
+		mcp.WithString("create_target_if_missing", mcp.Description("Create the target if it does not exist (true or false)")),
+		mcp.WithString("reject_if_content_preexists", mcp.Description("Reject if target already has content (true or false)")),
+		mcp.WithString("trim_target_whitespace", mcp.Description("Trim whitespace from target content before operation (true or false)")),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -106,11 +134,54 @@ func registerAppendNote(s *server.MCPServer, client *obsidian.Client) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		_, err = client.Call("POST", "/vault/"+path, []byte(content))
+		op := req.GetString("operation", "replace")
+		if op != "replace" && op != "append" && op != "prepend" {
+			return mcp.NewToolResultError("operation must be 'replace', 'append', or 'prepend'"), nil
+		}
+		targetType := req.GetString("target_type", "")
+		target := req.GetString("target", "")
+		hasTarget := targetType != "" && target != ""
+
+		if op == "prepend" && !hasTarget {
+			return mcp.NewToolResultError("prepend requires target_type and target"), nil
+		}
+
+		var method string
+		headers := make(map[string]string)
+		switch {
+		case op == "replace" && !hasTarget:
+			method = "PUT"
+		case op == "replace" && hasTarget:
+			method = "PUT"
+			h, hErr := buildTargetHeaders(req)
+			if hErr != nil {
+				return mcp.NewToolResultError(hErr.Error()), nil
+			}
+			headers = h
+		case op == "append" && !hasTarget:
+			method = "POST"
+		case op == "append" && hasTarget:
+			method = "POST"
+			h, hErr := buildTargetHeaders(req)
+			if hErr != nil {
+				return mcp.NewToolResultError(hErr.Error()), nil
+			}
+			headers = h
+		case op == "prepend" && hasTarget:
+			method = "PATCH"
+			h, hErr := buildTargetHeaders(req)
+			if hErr != nil {
+				return mcp.NewToolResultError(hErr.Error()), nil
+			}
+			headers = h
+			headers["Operation"] = "prepend"
+		}
+
+		_, err = client.Call(method, "/vault/"+path, []byte(content), headers)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully appended content to: %s", path)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully %sed note: %s", op, path)), nil
 	})
 }
 
