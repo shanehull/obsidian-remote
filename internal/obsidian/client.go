@@ -62,7 +62,7 @@ func (c *Client) Call(method, path string, body []byte, headers ...map[string]st
 // contentTypeFor returns the appropriate Content-Type for an Obsidian REST API request.
 // Vault write operations expect text/markdown; everything else uses application/json.
 func contentTypeFor(method, path string) string {
-	if strings.HasPrefix(path, "/vault/") && (method == http.MethodPut || method == http.MethodPost) {
+	if strings.HasPrefix(path, "/vault/") && (method == http.MethodPut || method == http.MethodPost || method == http.MethodPatch) {
 		return "text/markdown"
 	}
 	return "application/json"
