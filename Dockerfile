@@ -1,5 +1,5 @@
 # Stage 1: Build the Go MCP Server (Bridge)
-FROM golang:1.25 AS builder
+FROM golang:1.26 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -8,7 +8,7 @@ COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -o server ./cmd/server/main.go
 
 # Stage 2: Unified Headless Container
-FROM lscr.io/linuxserver/obsidian:v1.12.7-ls127
+FROM lscr.io/linuxserver/obsidian:v1.12.7-ls130
 
 # Install runtime dependencies for the bridge and auto-trust
 RUN apt-get update && \

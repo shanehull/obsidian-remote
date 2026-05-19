@@ -18,3 +18,27 @@ test/e2e_test.sh
 ## Conventions
 
 - Semantic commits for release-please: `feat:` bumps minor (pre-1.0), `fix:` bumps patch. `docs:`, `ci:`, `chore:` don't bump version and don't appear in changelog.
+
+## Updating dependencies
+
+Go modules:
+```bash
+go get -u github.com/mark3labs/mcp-go@latest && go mod tidy
+```
+
+Only bump direct deps (`mcp-go`). Transitive deps update automatically with `go mod tidy`.
+
+mise (match Go version to `go.mod` directive):
+```bash
+# edit mise.toml, then:
+mise install
+```
+
+Docker base image:
+```bash
+# check: https://github.com/linuxserver/docker-obsidian/pkgs/container/obsidian
+# update FROM line in Dockerfile, then:
+docker compose build && test/e2e_test.sh
+```
+
+CI workflows: update `go-version` in `.github/workflows/lint.yaml` and `test.yaml`.
