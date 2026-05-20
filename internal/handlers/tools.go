@@ -23,6 +23,18 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerManageTags(s, client)
 }
 
+var validTargetTypes = map[string]bool{
+	"heading":     true,
+	"block":       true,
+	"frontmatter": true,
+}
+
+var validTargetScopes = map[string]bool{
+	"content":          true,
+	"marker":           true,
+	"markerAndContent": true,
+}
+
 func normalizePath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
 }
@@ -81,7 +93,7 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 	if targetType == "" || target == "" {
 		return nil, fmt.Errorf("both target_type and target are required when targeting a section")
 	}
-	if targetType != "heading" && targetType != "block" && targetType != "frontmatter" {
+	if !validTargetTypes[targetType] {
 		return nil, fmt.Errorf("target_type must be 'heading', 'block', or 'frontmatter'")
 	}
 	headers := map[string]string{
@@ -89,7 +101,7 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 		"Target":      target,
 	}
 	if scope := req.GetString("target_scope", ""); scope != "" {
-		if scope != "content" && scope != "marker" && scope != "markerAndContent" {
+		if !validTargetScopes[scope] {
 			return nil, fmt.Errorf("target_scope must be 'content', 'marker', or 'markerAndContent'")
 		}
 		headers["Target-Scope"] = scope
@@ -97,16 +109,35 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 	if delimiter := req.GetString("target_delimiter", ""); delimiter != "" {
 		headers["Target-Delimiter"] = delimiter
 	}
-	if req.GetString("create_target_if_missing", "") == "true" {
-		headers["Create-Target-If-Missing"] = "true"
-	}
-	if req.GetString("reject_if_content_preexists", "") == "true" {
-		headers["Reject-If-Content-Preexists"] = "true"
-	}
-	if req.GetString("trim_target_whitespace", "") == "true" {
-		headers["Trim-Target-Whitespace"] = "true"
+	for _, opt := range []struct {
+		field string
+		key   string
+	}{
+		{"create_target_if_missing", "Create-Target-If-Missing"},
+		{"reject_if_content_preexists", "Reject-If-Content-Preexists"},
+		{"trim_target_whitespace", "Trim-Target-Whitespace"},
+	} {
+		if req.GetString(opt.field, "") == "true" {
+			headers[opt.key] = "true"
+		}
 	}
 	return headers, nil
+}
+
+func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
+	switch op {
+	case "replace":
+		return "PUT", nil
+	case "append":
+		return "POST", nil
+	case "prepend":
+		if !hasTarget {
+			return "", fmt.Errorf("prepend requires target_type and target")
+		}
+		return "PATCH", nil
+	default:
+		return "", fmt.Errorf("operation must be 'replace', 'append', or 'prepend'")
+	}
 }
 
 func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
@@ -135,46 +166,25 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		op := req.GetString("operation", "replace")
-		if op != "replace" && op != "append" && op != "prepend" {
-			return mcp.NewToolResultError("operation must be 'replace', 'append', or 'prepend'"), nil
-		}
 		targetType := req.GetString("target_type", "")
 		target := req.GetString("target", "")
 		hasTarget := targetType != "" && target != ""
 
-		if op == "prepend" && !hasTarget {
-			return mcp.NewToolResultError("prepend requires target_type and target"), nil
+		method, err := resolveUpdateMethod(op, hasTarget)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		var method string
-		headers := make(map[string]string)
-		switch {
-		case op == "replace" && !hasTarget:
-			method = "PUT"
-		case op == "replace" && hasTarget:
-			method = "PUT"
+		var headers map[string]string
+		if hasTarget {
 			h, hErr := buildTargetHeaders(req)
 			if hErr != nil {
 				return mcp.NewToolResultError(hErr.Error()), nil
 			}
 			headers = h
-		case op == "append" && !hasTarget:
-			method = "POST"
-		case op == "append" && hasTarget:
-			method = "POST"
-			h, hErr := buildTargetHeaders(req)
-			if hErr != nil {
-				return mcp.NewToolResultError(hErr.Error()), nil
+			if op == "prepend" {
+				headers["Operation"] = "prepend"
 			}
-			headers = h
-		case op == "prepend" && hasTarget:
-			method = "PATCH"
-			h, hErr := buildTargetHeaders(req)
-			if hErr != nil {
-				return mcp.NewToolResultError(hErr.Error()), nil
-			}
-			headers = h
-			headers["Operation"] = "prepend"
 		}
 
 		_, err = client.Call(method, "/vault/"+path, []byte(content), headers)

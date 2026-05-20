@@ -100,47 +100,48 @@ func TestRemoveTagFromSlice(t *testing.T) {
 	}
 }
 
+func assertHeader(t *testing.T, headers map[string]string, key, want string) {
+	t.Helper()
+	if want != "" && headers[key] != want {
+		t.Fatalf("%s = %q, want %q", key, headers[key], want)
+	}
+}
+
 func TestBuildTargetHeaders(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     map[string]any
-		wantNil  bool
-		wantErr  bool
-		wantType string
-		wantTarg string
-		wantScop string
-		wantDel  string
-		wantCrea string
-		wantReje string
-		wantTrim string
+		name    string
+		args    map[string]any
+		wantNil bool
+		wantErr bool
+		want    map[string]string
 	}{
-		{"no_targeting", map[string]any{}, true, false, "", "", "", "", "", "", ""},
+		{"no_targeting", map[string]any{}, true, false, nil},
 		{"heading_target", map[string]any{
 			"target_type": "heading", "target": "My Section",
-		}, false, false, "heading", "My Section", "", "", "", "", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "My Section"}},
 		{"with_scope", map[string]any{
 			"target_type": "heading", "target": "Heading", "target_scope": "content",
-		}, false, false, "heading", "Heading", "content", "", "", "", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "Heading", "Target-Scope": "content"}},
 		{"with_delimiter", map[string]any{
 			"target_type": "heading", "target": "H1::H2", "target_delimiter": "::",
-		}, false, false, "heading", "H1::H2", "", "::", "", "", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H1::H2", "Target-Delimiter": "::"}},
 		{"with_create_if_missing", map[string]any{
 			"target_type": "heading", "target": "H", "create_target_if_missing": "true",
-		}, false, false, "heading", "H", "", "", "true", "", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Create-Target-If-Missing": "true"}},
 		{"with_reject", map[string]any{
 			"target_type": "heading", "target": "H", "reject_if_content_preexists": "true",
-		}, false, false, "heading", "H", "", "", "", "true", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Reject-If-Content-Preexists": "true"}},
 		{"with_trim", map[string]any{
 			"target_type": "heading", "target": "H", "trim_target_whitespace": "true",
-		}, false, false, "heading", "H", "", "", "", "", "true"},
-		{"missing_target", map[string]any{"target_type": "heading"}, false, true, "", "", "", "", "", "", ""},
-		{"missing_target_type", map[string]any{"target": "H"}, false, true, "", "", "", "", "", "", ""},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Trim-Target-Whitespace": "true"}},
+		{"missing_target", map[string]any{"target_type": "heading"}, false, true, nil},
+		{"missing_target_type", map[string]any{"target": "H"}, false, true, nil},
 		{"invalid_target_type", map[string]any{
 			"target_type": "invalid", "target": "H",
-		}, false, true, "", "", "", "", "", "", ""},
+		}, false, true, nil},
 		{"invalid_scope", map[string]any{
 			"target_type": "heading", "target": "H", "target_scope": "bad",
-		}, false, true, "", "", "", "", "", "", ""},
+		}, false, true, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,26 +162,8 @@ func TestBuildTargetHeaders(t *testing.T) {
 				}
 				return
 			}
-			if headers["Target-Type"] != tt.wantType {
-				t.Fatalf("Target-Type = %q, want %q", headers["Target-Type"], tt.wantType)
-			}
-			if headers["Target"] != tt.wantTarg {
-				t.Fatalf("Target = %q, want %q", headers["Target"], tt.wantTarg)
-			}
-			if tt.wantScop != "" && headers["Target-Scope"] != tt.wantScop {
-				t.Fatalf("Target-Scope = %q, want %q", headers["Target-Scope"], tt.wantScop)
-			}
-			if tt.wantDel != "" && headers["Target-Delimiter"] != tt.wantDel {
-				t.Fatalf("Target-Delimiter = %q, want %q", headers["Target-Delimiter"], tt.wantDel)
-			}
-			if tt.wantCrea != "" && headers["Create-Target-If-Missing"] != tt.wantCrea {
-				t.Fatalf("Create-Target-If-Missing = %q, want %q", headers["Create-Target-If-Missing"], tt.wantCrea)
-			}
-			if tt.wantReje != "" && headers["Reject-If-Content-Preexists"] != tt.wantReje {
-				t.Fatalf("Reject-If-Content-Preexists = %q, want %q", headers["Reject-If-Content-Preexists"], tt.wantReje)
-			}
-			if tt.wantTrim != "" && headers["Trim-Target-Whitespace"] != tt.wantTrim {
-				t.Fatalf("Trim-Target-Whitespace = %q, want %q", headers["Trim-Target-Whitespace"], tt.wantTrim)
+			for k, v := range tt.want {
+				assertHeader(t, headers, k, v)
 			}
 		})
 	}
