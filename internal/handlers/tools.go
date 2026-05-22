@@ -109,6 +109,11 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 	if delimiter := req.GetString("target_delimiter", ""); delimiter != "" {
 		headers["Target-Delimiter"] = delimiter
 	}
+	addBoolTargetHeaders(headers, req)
+	return headers, nil
+}
+
+func addBoolTargetHeaders(headers map[string]string, req mcp.CallToolRequest) {
 	for _, opt := range []struct {
 		field string
 		key   string
@@ -121,7 +126,6 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 			headers[opt.key] = "true"
 		}
 	}
-	return headers, nil
 }
 
 func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
@@ -140,6 +144,63 @@ func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
 	}
 }
 
+type updateNoteParams struct {
+	path    string
+	content string
+	op      string
+	method  string
+	headers map[string]string
+}
+
+func parseUpdateNote(req mcp.CallToolRequest) (*updateNoteParams, error) {
+	path, err := req.RequireString("path")
+	if err != nil {
+		return nil, err
+	}
+	path = normalizePath(path)
+	content, err := req.RequireString("content")
+	if err != nil {
+		return nil, err
+	}
+	op := req.GetString("operation", "replace")
+	targetType := req.GetString("target_type", "")
+	target := req.GetString("target", "")
+	hasTarget := targetType != "" && target != ""
+
+	method, err := resolveUpdateMethod(op, hasTarget)
+	if err != nil {
+		return nil, err
+	}
+
+	var headers map[string]string
+	if hasTarget {
+		h, err := buildTargetHeaders(req)
+		if err != nil {
+			return nil, err
+		}
+		headers = h
+		if op == "prepend" {
+			headers["Operation"] = "prepend"
+		}
+	}
+
+	return &updateNoteParams{path, content, op, method, headers}, nil
+}
+
+func handleUpdateNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params, err := parseUpdateNote(req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		_, err = client.Call(params.method, "/vault/"+params.path, []byte(params.content), params.headers)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully %sed note: %s", params.op, params.path)), nil
+	}
+}
+
 func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 	s.AddTool(mcp.NewTool("update_note",
 		mcp.WithDescription("Create, update, or append content within a note"),
@@ -155,44 +216,7 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 		mcp.WithString("trim_target_whitespace", mcp.Description("Trim whitespace from target content before operation (true or false)")),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		path = normalizePath(path)
-		content, err := req.RequireString("content")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		op := req.GetString("operation", "replace")
-		targetType := req.GetString("target_type", "")
-		target := req.GetString("target", "")
-		hasTarget := targetType != "" && target != ""
-
-		method, err := resolveUpdateMethod(op, hasTarget)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		var headers map[string]string
-		if hasTarget {
-			h, hErr := buildTargetHeaders(req)
-			if hErr != nil {
-				return mcp.NewToolResultError(hErr.Error()), nil
-			}
-			headers = h
-			if op == "prepend" {
-				headers["Operation"] = "prepend"
-			}
-		}
-
-		_, err = client.Call(method, "/vault/"+path, []byte(content), headers)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully %sed note: %s", op, path)), nil
-	})
+	), handleUpdateNote(client))
 }
 
 func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {

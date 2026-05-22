@@ -107,14 +107,40 @@ func assertHeader(t *testing.T, headers map[string]string, key, want string) {
 	}
 }
 
+type buildTargetHeadersTestCase struct {
+	name    string
+	args    map[string]any
+	wantNil bool
+	wantErr bool
+	want    map[string]string
+}
+
+func testBuildTargetHeadersCase(t *testing.T, tt buildTargetHeadersTestCase) {
+	t.Helper()
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: tt.args}}
+	headers, err := buildTargetHeaders(req)
+	if tt.wantErr {
+		if err == nil {
+			t.Fatalf("expected error for %v", tt.args)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tt.wantNil {
+		if headers != nil {
+			t.Fatalf("expected nil headers, got %v", headers)
+		}
+		return
+	}
+	for k, v := range tt.want {
+		assertHeader(t, headers, k, v)
+	}
+}
+
 func TestBuildTargetHeaders(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    map[string]any
-		wantNil bool
-		wantErr bool
-		want    map[string]string
-	}{
+	tests := []buildTargetHeadersTestCase{
 		{"no_targeting", map[string]any{}, true, false, nil},
 		{"heading_target", map[string]any{
 			"target_type": "heading", "target": "My Section",
@@ -145,26 +171,7 @@ func TestBuildTargetHeaders(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: tt.args}}
-			headers, err := buildTargetHeaders(req)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error for %v", tt.args)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.wantNil {
-				if headers != nil {
-					t.Fatalf("expected nil headers, got %v", headers)
-				}
-				return
-			}
-			for k, v := range tt.want {
-				assertHeader(t, headers, k, v)
-			}
+			testBuildTargetHeadersCase(t, tt)
 		})
 	}
 }
