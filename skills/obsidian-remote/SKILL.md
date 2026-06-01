@@ -87,6 +87,7 @@ Behavior by combination:
 
 | Parameter        | Description                                              |
 | ---------------- | -------------------------------------------------------- |
+| `path`           | Current path of the note                                 |
 | `newPath`        | Destination path                                         |
 | `allowOverwrite` | `"true"` to overwrite if destination exists (default false) |
 
