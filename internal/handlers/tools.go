@@ -17,6 +17,7 @@ func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
 	registerReadNote(s, client)
 	registerUpdateNote(s, client)
 	registerDeleteNote(s, client)
+	registerMoveNote(s, client)
 	registerGlobalSearch(s, client)
 	registerSearchReplace(s, client)
 	registerManageFrontmatter(s, client)
@@ -237,6 +238,45 @@ func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("Successfully deleted note: %s", path)), nil
 	})
+}
+
+func handleMoveNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := req.RequireString("path")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		newPath, err := req.RequireString("newPath")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		path = normalizePath(path)
+		newPath = normalizePath(newPath)
+
+		headers := map[string]string{
+			"Destination": newPath,
+		}
+		if allow := req.GetString("allowOverwrite", ""); allow == "true" {
+			headers["Allow-Overwrite"] = "true"
+		}
+
+		_, err = client.Call("PATCH", "/vault/"+path, nil, headers)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully moved note from %s to %s", path, newPath)), nil
+	}
+}
+
+func registerMoveNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("move_note",
+		mcp.WithDescription("Move/rename a note to a new path"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Current path of the note")),
+		mcp.WithString("newPath", mcp.Required(), mcp.Description("New path for the note")),
+		mcp.WithString("allowOverwrite", mcp.Description("Allow overwrite if destination exists (true or false, default false)")),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+	), handleMoveNote(client))
 }
 
 func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
