@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/shanehull/obsidian-remote/compare/v1.0.0...v1.1.0) (2026-06-01)
+
+
+### Features
+
+* add move_note tool for moving/renaming vault files ([740f880](https://github.com/shanehull/obsidian-remote/commit/740f88070feb26f64dfedae5727bfa41e4970bc6))
+
 ## [1.0.0](https://github.com/shanehull/obsidian-remote/compare/v0.3.0...v1.0.0) (2026-05-19)
 
 
