@@ -135,12 +135,13 @@ Clients that support SSE can connect to `/sse`:
 - `read_note`: Read a note, with optional section targeting by heading, block, or frontmatter.
 - `update_note`: Create or update a note, with optional section targeting and `append`/`prepend`/`replace` operations.
 - `delete_note`: Permanently delete a note.
+- `move_note`: Move/rename a note to a new path.
 - `global_search`: Search for text or regex across the vault.
 - `search_replace`: Targeted search and replace within a specific file.
 - `manage_frontmatter`: Manage YAML frontmatter keys.
 - `manage_tags`: Add or remove tags from a note.
 
-Write operations (`update`, `delete`, `search_replace`, `manage_frontmatter`, `manage_tags`) are annotated as destructive, prompting clients to request user confirmation before execution.
+Write operations (`update`, `delete`, `search_replace`, `manage_frontmatter`, `manage_tags`, `move`) are annotated as destructive, prompting clients to request user confirmation before execution.
 
 ## Architecture
 

@@ -1,9 +1,15 @@
 package handlers
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/shanehull/obsidian-remote/internal/config"
+	"github.com/shanehull/obsidian-remote/internal/obsidian"
 )
 
 func TestNormalizeTags(t *testing.T) {
@@ -196,4 +202,124 @@ func TestNormalizePath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTestClient(t *testing.T, handler http.HandlerFunc) *obsidian.Client {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return obsidian.NewClient(&config.Config{
+		ObsidianURL: srv.URL,
+		ObsidianKey: "test-key",
+	})
+}
+
+func TestHandleMoveNote(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var gotMethod, gotPath, gotDest string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			gotDest = r.Header.Get("Destination")
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		handler := handleMoveNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":    "notes/old.md",
+			"newPath": "notes/new.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotMethod != "PATCH" {
+			t.Fatalf("method = %q, want PATCH", gotMethod)
+		}
+		if gotPath != "/vault/notes/old.md" {
+			t.Fatalf("path = %q, want /vault/notes/old.md", gotPath)
+		}
+		if gotDest != "notes/new.md" {
+			t.Fatalf("Destination = %q, want notes/new.md", gotDest)
+		}
+		if !strings.Contains(result.Content[0].(mcp.TextContent).Text, "Successfully moved") {
+			t.Fatalf("unexpected result text: %s", result.Content[0].(mcp.TextContent).Text)
+		}
+	})
+
+	t.Run("success with allowOverwrite", func(t *testing.T) {
+		var gotOverwrite string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotOverwrite = r.Header.Get("Allow-Overwrite")
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		handler := handleMoveNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":           "notes/old.md",
+			"newPath":        "notes/exists.md",
+			"allowOverwrite": "true",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotOverwrite != "true" {
+			t.Fatalf("Allow-Overwrite = %q, want true", gotOverwrite)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		handler := handleMoveNote(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"newPath": "notes/new.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing path")
+		}
+	})
+
+	t.Run("missing newPath", func(t *testing.T) {
+		handler := handleMoveNote(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path": "notes/old.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing newPath")
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`not found`))
+		})
+
+		handler := handleMoveNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":    "notes/missing.md",
+			"newPath": "notes/target.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error wrapping api error")
+		}
+	})
 }
