@@ -323,3 +323,494 @@ func TestHandleMoveNote(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleListNotes(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var gotMethod, gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`["note.md"]`))
+		})
+
+		handler := handleListNotes(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotMethod != "GET" {
+			t.Fatalf("method = %q, want GET", gotMethod)
+		}
+		if gotPath != "/vault/" {
+			t.Fatalf("path = %q, want /vault/", gotPath)
+		}
+	})
+
+	t.Run("with subdir", func(t *testing.T) {
+		var gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`["note.md"]`))
+		})
+
+		handler := handleListNotes(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"dirPath": "notes/sub",
+		}}}
+		_, _ = handler(context.Background(), req)
+		if gotPath != "/vault/notes/sub" {
+			t.Fatalf("path = %q, want /vault/notes/sub", gotPath)
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+
+		handler := handleListNotes(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error wrapping api error")
+		}
+	})
+}
+
+func TestHandleReadNote(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var gotMethod, gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("# Hello"))
+		})
+
+		handler := handleReadNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path": "notes/test.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotMethod != "GET" {
+			t.Fatalf("method = %q, want GET", gotMethod)
+		}
+		if gotPath != "/vault/notes/test.md" {
+			t.Fatalf("path = %q, want /vault/notes/test.md", gotPath)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		handler := handleReadNote(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing path")
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		handler := handleReadNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path": "notes/missing.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error wrapping api error")
+		}
+	})
+}
+
+func TestHandleDeleteNote(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var gotMethod, gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		handler := handleDeleteNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path": "notes/test.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotMethod != "DELETE" {
+			t.Fatalf("method = %q, want DELETE", gotMethod)
+		}
+		if gotPath != "/vault/notes/test.md" {
+			t.Fatalf("path = %q, want /vault/notes/test.md", gotPath)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		handler := handleDeleteNote(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing path")
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		handler := handleDeleteNote(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path": "notes/missing.md",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error wrapping api error")
+		}
+	})
+}
+
+func TestHandleGlobalSearch(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var gotMethod, gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.RequestURI()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		})
+
+		handler := handleGlobalSearch(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"query": "test",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if gotMethod != "POST" {
+			t.Fatalf("method = %q, want POST", gotMethod)
+		}
+		if gotPath != "/search/simple/?query=test" {
+			t.Fatalf("path = %q, want /search/simple/?query=test", gotPath)
+		}
+	})
+
+	t.Run("missing query", func(t *testing.T) {
+		handler := handleGlobalSearch(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing query")
+		}
+	})
+}
+
+func TestHandleSearchReplace(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var getCalled, putCalled bool
+		var putBody string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				getCalled = true
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("hello world"))
+			default:
+				putCalled = true
+				buf := make([]byte, 1024)
+				n, _ := r.Body.Read(buf)
+				putBody = string(buf[:n])
+				w.WriteHeader(http.StatusNoContent)
+			}
+		})
+
+		handler := handleSearchReplace(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":    "notes/test.md",
+			"search":  "hello",
+			"replace": "hi",
+			"count":   -1.0,
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if !getCalled || !putCalled {
+			t.Fatal("expected both GET and PUT calls")
+		}
+		if putBody != "hi world" {
+			t.Fatalf("putBody = %q, want %q", putBody, "hi world")
+		}
+	})
+
+	t.Run("search text not found", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("hello world"))
+		})
+
+		handler := handleSearchReplace(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":    "notes/test.md",
+			"search":  "xyz",
+			"replace": "hi",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error when search text not found")
+		}
+	})
+
+	t.Run("missing params", func(t *testing.T) {
+		handler := handleSearchReplace(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing params")
+		}
+	})
+}
+
+func TestHandleManageTags(t *testing.T) {
+	t.Run("add tag success", func(t *testing.T) {
+		var patchBody string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"tags":["existing"]}`))
+			default:
+				buf := make([]byte, 1024)
+				n, _ := r.Body.Read(buf)
+				patchBody = string(buf[:n])
+				w.WriteHeader(http.StatusNoContent)
+			}
+		})
+
+		handler := handleManageTags(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":      "notes/test.md",
+			"operation": "add",
+			"tag":       "newtag",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if patchBody != `["existing","newtag"]` {
+			t.Fatalf("patchBody = %q, want [\"existing\",\"newtag\"]", patchBody)
+		}
+	})
+
+	t.Run("remove tag success", func(t *testing.T) {
+		var patchBody string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"tags":["a","b"]}`))
+			default:
+				buf := make([]byte, 1024)
+				n, _ := r.Body.Read(buf)
+				patchBody = string(buf[:n])
+				w.WriteHeader(http.StatusNoContent)
+			}
+		})
+
+		handler := handleManageTags(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":      "notes/test.md",
+			"operation": "remove",
+			"tag":       "a",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if patchBody != `["b"]` {
+			t.Fatalf("patchBody = %q, want [\"b\"]", patchBody)
+		}
+	})
+
+	t.Run("invalid operation", func(t *testing.T) {
+		handler := handleManageTags(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":      "notes/test.md",
+			"operation": "invalid",
+			"tag":       "x",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for invalid operation")
+		}
+	})
+
+	t.Run("missing params", func(t *testing.T) {
+		handler := handleManageTags(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing params")
+		}
+	})
+}
+
+func TestHandleManageFrontmatter(t *testing.T) {
+	t.Run("get success", func(t *testing.T) {
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"title":"test"}`))
+		})
+
+		handler := handleManageFrontmatter(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":      "notes/test.md",
+			"operation": "get",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+	})
+
+	t.Run("set success", func(t *testing.T) {
+		var patchMethod, patchTarget string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			patchMethod = r.Method
+			patchTarget = r.Header.Get("Target")
+			w.WriteHeader(http.StatusNoContent)
+		})
+
+		handler := handleManageFrontmatter(client)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":        "notes/test.md",
+			"operation":   "set",
+			"jsonPayload": `{"title":"hello"}`,
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+		}
+		if patchMethod != "PATCH" {
+			t.Fatalf("method = %q, want PATCH", patchMethod)
+		}
+		if patchTarget != "title" {
+			t.Fatalf("Target = %q, want title", patchTarget)
+		}
+	})
+
+	t.Run("set with invalid json", func(t *testing.T) {
+		handler := handleManageFrontmatter(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":        "notes/test.md",
+			"operation":   "set",
+			"jsonPayload": `not json`,
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for invalid json")
+		}
+	})
+
+	t.Run("invalid operation", func(t *testing.T) {
+		handler := handleManageFrontmatter(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+			"path":      "notes/test.md",
+			"operation": "delete",
+		}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for invalid operation")
+		}
+	})
+
+	t.Run("missing params", func(t *testing.T) {
+		handler := handleManageFrontmatter(nil)
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing params")
+		}
+	})
+}

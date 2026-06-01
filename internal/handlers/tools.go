@@ -40,33 +40,28 @@ func normalizePath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
 }
 
-func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("list_notes",
-		mcp.WithDescription("List files in the vault"),
-		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleListNotes(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		subDir := normalizePath(req.GetString("dirPath", ""))
 		res, err := client.Call("GET", "/vault/"+subDir, nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(string(res)), nil
-	})
+	}
 }
 
-func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("read_note",
-		mcp.WithDescription("Read a note"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
-		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
-		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
-		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
+func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("list_notes",
+		mcp.WithDescription("List files in the vault"),
+		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	), handleListNotes(client))
+}
+
+func handleReadNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -82,7 +77,20 @@ func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(string(res)), nil
-	})
+	}
+}
+
+func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("read_note",
+		mcp.WithDescription("Read a note"),
+		mcp.WithString("path", mcp.Required()),
+		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
+		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
+		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
+		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+	), handleReadNote(client))
 }
 
 func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
@@ -220,13 +228,8 @@ func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
 	), handleUpdateNote(client))
 }
 
-func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("delete_note",
-		mcp.WithDescription("Permanently delete a note from the vault"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note to delete")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleDeleteNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -237,7 +240,16 @@ func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("Successfully deleted note: %s", path)), nil
-	})
+	}
+}
+
+func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("delete_note",
+		mcp.WithDescription("Permanently delete a note from the vault"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note to delete")),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+	), handleDeleteNote(client))
 }
 
 func handleMoveNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -279,13 +291,8 @@ func registerMoveNote(s *server.MCPServer, client *obsidian.Client) {
 	), handleMoveNote(client))
 }
 
-func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("global_search",
-		mcp.WithDescription("Search for text across all notes"),
-		mcp.WithString("query", mcp.Required()),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleGlobalSearch(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := req.RequireString("query")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -295,19 +302,20 @@ func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(string(res)), nil
-	})
+	}
 }
 
-func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("search_replace",
-		mcp.WithDescription("Search and replace text within a specific note"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
-		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
-		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
-		mcp.WithNumber("count", mcp.Description("Maximum occurrences to replace (default: 1, set to -1 for all)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("global_search",
+		mcp.WithDescription("Search for text across all notes"),
+		mcp.WithString("query", mcp.Required()),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+	), handleGlobalSearch(client))
+}
+
+func handleSearchReplace(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -345,7 +353,19 @@ func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", replaced, path)), nil
-	})
+	}
+}
+
+func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("search_replace",
+		mcp.WithDescription("Search and replace text within a specific note"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
+		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
+		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
+		mcp.WithNumber("count", mcp.Description("Maximum occurrences to replace (default: 1, set to -1 for all)")),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+	), handleSearchReplace(client))
 }
 
 func normalizeTags(tags []string) []string {
@@ -381,15 +401,8 @@ func removeTagFromSlice(tags []string, tag string) ([]string, bool) {
 	return filtered, true
 }
 
-func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("manage_tags",
-		mcp.WithDescription("Add or remove tags from a note's frontmatter"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
-		mcp.WithString("operation", mcp.Required(), mcp.Description("add or remove")),
-		mcp.WithString("tag", mcp.Required(), mcp.Description("Tag value (without leading #)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleManageTags(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -458,18 +471,22 @@ func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
 			msg = fmt.Sprintf("Successfully removed tag '%s' from %s", tag, path)
 		}
 		return mcp.NewToolResultText(msg), nil
-	})
+	}
 }
 
-func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("manage_frontmatter",
-		mcp.WithDescription("Get or set YAML frontmatter keys"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("operation", mcp.Required(), mcp.Description("get or set")),
-		mcp.WithString("jsonPayload", mcp.Description("JSON object of keys to set (required for 'set')")),
+func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("manage_tags",
+		mcp.WithDescription("Add or remove tags from a note's frontmatter"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
+		mcp.WithString("operation", mcp.Required(), mcp.Description("add or remove")),
+		mcp.WithString("tag", mcp.Required(), mcp.Description("Tag value (without leading #)")),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	), handleManageTags(client))
+}
+
+func handleManageFrontmatter(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := req.RequireString("path")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -526,5 +543,16 @@ func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
 		}
 
 		return mcp.NewToolResultError("Invalid operation. Use 'get' or 'set'."), nil
-	})
+	}
+}
+
+func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
+	s.AddTool(mcp.NewTool("manage_frontmatter",
+		mcp.WithDescription("Get or set YAML frontmatter keys"),
+		mcp.WithString("path", mcp.Required()),
+		mcp.WithString("operation", mcp.Required(), mcp.Description("get or set")),
+		mcp.WithString("jsonPayload", mcp.Description("JSON object of keys to set (required for 'set')")),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+	), handleManageFrontmatter(client))
 }
