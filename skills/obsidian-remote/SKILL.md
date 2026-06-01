@@ -5,14 +5,10 @@ compatibility: Requires Obsidian Remote container with MCP enabled.
 allowed-tools: mcp__obsidian-remote__*
 ---
 
-## Gotchas
+# Obsidian Remote
 
-- **`prepend` requires a target** — you cannot prepend to an entire file. Use `operation=append` with no target to add content at the end.
-- **`target_type` and `target` are a pair** — providing one without the other is an error.
-- **`target_scope` only applies to `heading` and `block`** — it is ignored for `frontmatter` targets.
-- **Boolean params are strings** — `create_target_if_missing`, `reject_if_content_preexists`, and `trim_target_whitespace` expect `"true"` (a string), not `true` (a boolean).
-- **Nested headings use `::`** — target `"Projects::Active"` not `"Projects/Active"` or `"Projects > Active"`.
-- **`search_replace` count defaults to `1`** — only the first occurrence is replaced unless you set `count` to `-1`.
+Surgically read, write, and search an Obsidian vault via MCP tools.
+Target specific headings, blocks, or frontmatter fields without loading full files.
 
 ## Tools
 
@@ -26,6 +22,7 @@ allowed-tools: mcp__obsidian-remote__*
 | `search_replace`     | Yes     |
 | `manage_frontmatter` | Yes     |
 | `manage_tags`        | Yes     |
+| `move_note`          | Yes     |
 
 ### `read_note`
 
@@ -86,6 +83,13 @@ Behavior by combination:
 | `operation` | `add` or `remove`             |
 | `tag`       | Tag value without leading `#` |
 
+### `move_note`
+
+| Parameter        | Description                                              |
+| ---------------- | -------------------------------------------------------- |
+| `newPath`        | Destination path                                         |
+| `allowOverwrite` | `"true"` to overwrite if destination exists (default false) |
+
 ## Behavioral Rules
 
 ### Exclusive Write Path
@@ -94,7 +98,7 @@ Use **only** `obsidian-remote` tools for vault writes — never local `edit`/`wr
 
 ### Confirmation Required
 
-Before any write (`update_note`, `delete_note`, `search_replace`):
+Before any write (`update_note`, `delete_note`, `search_replace`, `move_note`):
 
 1. Show the exact content or diff.
 2. Ask for explicit confirmation.
@@ -103,5 +107,15 @@ Before any write (`update_note`, `delete_note`, `search_replace`):
 - **`update_note` replace**: Show old vs new via `read_note` with same target, then diffs.
 - **`update_note` append/prepend**: Show the block being inserted.
 - **`search_replace`**: Show old and new text in "Before/After" format.
+- **`move_note`**: Show current path and destination path.
 
 Never skip confirmation. No exceptions.
+
+## Gotchas
+
+- **`prepend` requires a target** — you cannot prepend to an entire file. Use `operation=append` with no target to add content at the end.
+- **`target_type` and `target` are a pair** — providing one without the other is an error.
+- **`target_scope` only applies to `heading` and `block`** — it is ignored for `frontmatter` targets.
+- **Boolean params are strings** — `create_target_if_missing`, `reject_if_content_preexists`, and `trim_target_whitespace` expect `"true"` (a string), not `true` (a boolean).
+- **Nested headings use `::`** — target `"Projects::Active"` not `"Projects/Active"` or `"Projects > Active"`.
+- **`search_replace` count defaults to `1`** — only the first occurrence is replaced unless you set `count` to `-1`.
