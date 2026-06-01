@@ -17,7 +17,7 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 
 ## Prerequisites
 
-- Docker and Docker Compose.
+- A container runtime (Docker, Podman, etc.). Docker Compose is used in the examples below.
 - A public URL (HTTPS) if accessing from outside your local network.
 - (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients (Claude Code, OpenCode, etc.). Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
 
