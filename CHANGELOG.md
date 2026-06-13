@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/shanehull/obsidian-remote/compare/v1.1.0...v1.1.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* use PATCH for targeted update_note operations instead of PUT/POST ([#37](https://github.com/shanehull/obsidian-remote/issues/37)) ([99b19cd](https://github.com/shanehull/obsidian-remote/commit/99b19cd5707bc6f50d3058299b2f04dd1603fdfc))
+
 ## [1.1.0](https://github.com/shanehull/obsidian-remote/compare/v1.0.0...v1.1.0) (2026-06-01)
 
 
