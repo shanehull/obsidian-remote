@@ -140,8 +140,14 @@ func addBoolTargetHeaders(headers map[string]string, req mcp.CallToolRequest) {
 func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
 	switch op {
 	case "replace":
+		if hasTarget {
+			return "PATCH", nil
+		}
 		return "PUT", nil
 	case "append":
+		if hasTarget {
+			return "PATCH", nil
+		}
 		return "POST", nil
 	case "prepend":
 		if !hasTarget {
@@ -188,9 +194,7 @@ func parseUpdateNote(req mcp.CallToolRequest) (*updateNoteParams, error) {
 			return nil, err
 		}
 		headers = h
-		if op == "prepend" {
-			headers["Operation"] = "prepend"
-		}
+		headers["Operation"] = op
 	}
 
 	return &updateNoteParams{path, content, op, method, headers}, nil
