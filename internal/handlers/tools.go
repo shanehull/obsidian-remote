@@ -40,17 +40,6 @@ func normalizePath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
 }
 
-func encodeTarget(target, delimiter string) string {
-	if delimiter == "" {
-		delimiter = "::"
-	}
-	parts := strings.Split(target, delimiter)
-	for i, p := range parts {
-		parts[i] = url.PathEscape(p)
-	}
-	return strings.Join(parts, delimiter)
-}
-
 func encodePath(p string) string {
 	parts := strings.Split(p, "/")
 	for i, part := range parts {
@@ -144,6 +133,79 @@ func registerListNotes(s *mcp.Server, client *obsidian.Client) {
 	}, handleListNotes(client))
 }
 
+func parseTarget(req *mcp.CallToolRequest) (targetType, target string, err error) {
+	targetType = getStringArg(req, "target_type", "")
+	target = getStringArg(req, "target", "")
+	if targetType == "" && target == "" {
+		return "", "", nil
+	}
+	if targetType == "" || target == "" {
+		return "", "", fmt.Errorf("both target_type and target are required when targeting a section")
+	}
+	if !validTargetTypes[targetType] {
+		return "", "", fmt.Errorf("target_type must be 'heading', 'block', or 'frontmatter'")
+	}
+	return targetType, target, nil
+}
+
+func targetPathSegment(req *mcp.CallToolRequest) (string, error) {
+	targetType, target, err := parseTarget(req)
+	if err != nil {
+		return "", err
+	}
+	if targetType == "" {
+		return "", nil
+	}
+	delimiter := getStringArg(req, "target_delimiter", "")
+	if delimiter == "" {
+		delimiter = "::"
+	}
+	segments := targetSegments(target, delimiter)
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return "/" + targetType + "/" + strings.Join(segments, "/"), nil
+}
+
+func targetSegments(target, delimiter string) []string {
+	if delimiter == "" {
+		delimiter = "::"
+	}
+	return strings.Split(target, delimiter)
+}
+
+func patchBody(targetType, target, delimiter, operation, content string, value any, req *mcp.CallToolRequest) ([]byte, error) {
+	var t any
+	if targetType == "heading" {
+		t = targetSegments(target, delimiter)
+	} else {
+		t = target
+	}
+	body := map[string]any{
+		"targetType": targetType,
+		"target":     t,
+		"operation":  operation,
+	}
+	if value != nil {
+		body["value"] = value
+	} else {
+		body["content"] = content
+	}
+	if scope := getStringArg(req, "target_scope", ""); scope != "" {
+		body["targetScope"] = scope
+	}
+	if getStringArg(req, "create_target_if_missing", "") == "true" {
+		body["createTargetIfMissing"] = true
+	}
+	if getStringArg(req, "reject_if_content_preexists", "") == "true" {
+		body["rejectIfContentPreexists"] = true
+	}
+	if getStringArg(req, "trim_target_whitespace", "") == "true" {
+		body["trimTargetWhitespace"] = true
+	}
+	return json.Marshal(body)
+}
+
 func handleReadNote(client *obsidian.Client) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		path, err := requireStringArg(req, "path")
@@ -152,11 +214,18 @@ func handleReadNote(client *obsidian.Client) mcp.ToolHandler {
 		}
 		path = normalizePath(path)
 
-		headers, headerErr := buildTargetHeaders(req)
-		if headerErr != nil {
-			return errorResult(headerErr.Error()), nil
+		targetPath, err := targetPathSegment(req)
+		if err != nil {
+			return errorResult(err.Error()), nil
 		}
-		res, err := client.Call("GET", "/vault/"+path, nil, headers)
+		var headers map[string]string
+		if scope := getStringArg(req, "target_scope", ""); scope != "" {
+			if !validTargetScopes[scope] {
+				return errorResult("target_scope must be 'content', 'marker', or 'markerAndContent'"), nil
+			}
+			headers = map[string]string{"Target-Scope": scope}
+		}
+		res, err := client.Call("GET", "/vault/"+path+targetPath, nil, headers)
 		if err != nil {
 			return errorResult(err.Error()), nil
 		}
@@ -183,51 +252,6 @@ func registerReadNote(s *mcp.Server, client *obsidian.Client) {
 	}, handleReadNote(client))
 }
 
-func buildTargetHeaders(req *mcp.CallToolRequest) (map[string]string, error) {
-	targetType := getStringArg(req, "target_type", "")
-	target := getStringArg(req, "target", "")
-	if targetType == "" && target == "" {
-		return nil, nil
-	}
-	if targetType == "" || target == "" {
-		return nil, fmt.Errorf("both target_type and target are required when targeting a section")
-	}
-	if !validTargetTypes[targetType] {
-		return nil, fmt.Errorf("target_type must be 'heading', 'block', or 'frontmatter'")
-	}
-	delimiter := getStringArg(req, "target_delimiter", "")
-	headers := map[string]string{
-		"Target-Type": targetType,
-		"Target":      encodeTarget(target, delimiter),
-	}
-	if scope := getStringArg(req, "target_scope", ""); scope != "" {
-		if !validTargetScopes[scope] {
-			return nil, fmt.Errorf("target_scope must be 'content', 'marker', or 'markerAndContent'")
-		}
-		headers["Target-Scope"] = scope
-	}
-	if delimiter != "" {
-		headers["Target-Delimiter"] = delimiter
-	}
-	addBoolTargetHeaders(headers, req)
-	return headers, nil
-}
-
-func addBoolTargetHeaders(headers map[string]string, req *mcp.CallToolRequest) {
-	for _, opt := range []struct {
-		field string
-		key   string
-	}{
-		{"create_target_if_missing", "Create-Target-If-Missing"},
-		{"reject_if_content_preexists", "Reject-If-Content-Preexists"},
-		{"trim_target_whitespace", "Trim-Target-Whitespace"},
-	} {
-		if getStringArg(req, opt.field, "") == "true" {
-			headers[opt.key] = "true"
-		}
-	}
-}
-
 func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
 	switch op {
 	case "replace":
@@ -251,11 +275,9 @@ func resolveUpdateMethod(op string, hasTarget bool) (string, error) {
 }
 
 type updateNoteParams struct {
-	path    string
-	content string
-	op      string
-	method  string
-	headers map[string]string
+	path   string
+	method string
+	body   []byte
 }
 
 func parseUpdateNote(req *mcp.CallToolRequest) (*updateNoteParams, error) {
@@ -269,26 +291,29 @@ func parseUpdateNote(req *mcp.CallToolRequest) (*updateNoteParams, error) {
 		return nil, err
 	}
 	op := getStringArg(req, "operation", "replace")
-	targetType := getStringArg(req, "target_type", "")
-	target := getStringArg(req, "target", "")
-	hasTarget := targetType != "" && target != ""
+	targetType, target, err := parseTarget(req)
+	if err != nil {
+		return nil, err
+	}
+	hasTarget := targetType != ""
 
 	method, err := resolveUpdateMethod(op, hasTarget)
 	if err != nil {
 		return nil, err
 	}
 
-	var headers map[string]string
+	var body []byte
 	if hasTarget {
-		h, err := buildTargetHeaders(req)
+		delimiter := getStringArg(req, "target_delimiter", "")
+		body, err = patchBody(targetType, target, delimiter, op, content, nil, req)
 		if err != nil {
 			return nil, err
 		}
-		headers = h
-		headers["Operation"] = op
+	} else {
+		body = []byte(content)
 	}
 
-	return &updateNoteParams{path, content, op, method, headers}, nil
+	return &updateNoteParams{path, method, body}, nil
 }
 
 func handleUpdateNote(client *obsidian.Client) mcp.ToolHandler {
@@ -297,11 +322,15 @@ func handleUpdateNote(client *obsidian.Client) mcp.ToolHandler {
 		if err != nil {
 			return errorResult(err.Error()), nil
 		}
-		_, err = client.Call(params.method, "/vault/"+params.path, []byte(params.content), params.headers)
+	var headers map[string]string
+	if params.method == "PATCH" {
+		headers = map[string]string{"Content-Type": "application/json"}
+	}
+	_, err = client.Call(params.method, "/vault/"+params.path, params.body, headers)
 		if err != nil {
 			return errorResult(err.Error()), nil
 		}
-		return textResult(fmt.Sprintf("Successfully %sed note: %s", params.op, params.path)), nil
+		return textResult(fmt.Sprintf("Successfully %sed note: %s", getStringArg(req, "operation", "replace"), params.path)), nil
 	}
 }
 
@@ -576,18 +605,18 @@ func handleManageTags(client *obsidian.Client) mcp.ToolHandler {
 			}
 		}
 
-		tagsJSON, err := json.Marshal(tags)
+		body, err := json.Marshal(map[string]any{
+			"targetType":             "frontmatter",
+			"target":                 "tags",
+			"operation":              "replace",
+			"value":                  tags,
+			"createTargetIfMissing":  true,
+		})
 		if err != nil {
-			return errorResult("failed to marshal tags: " + err.Error()), nil
+			return errorResult("failed to marshal patch body: " + err.Error()), nil
 		}
-		if _, err := client.Call("PATCH", "/vault/"+path, tagsJSON,
-			map[string]string{
-				"Content-Type":             "application/json",
-				"Operation":                "replace",
-				"Target-Type":              "frontmatter",
-				"Target":                   "tags",
-				"Create-Target-If-Missing": "true",
-			}); err != nil {
+		if _, err := client.Call("PATCH", "/vault/"+path, body,
+			map[string]string{"Content-Type": "application/json"}); err != nil {
 			return errorResult(err.Error()), nil
 		}
 
@@ -650,19 +679,19 @@ func handleManageFrontmatter(client *obsidian.Client) mcp.ToolHandler {
 
 			var errs []string
 			for k, v := range kvs {
-				b, marshalErr := json.Marshal(v)
+				body, marshalErr := json.Marshal(map[string]any{
+					"targetType":             "frontmatter",
+					"target":                 k,
+					"operation":              "replace",
+					"value":                  v,
+					"createTargetIfMissing":  true,
+				})
 				if marshalErr != nil {
-					errs = append(errs, k+": failed to marshal value: "+marshalErr.Error())
+					errs = append(errs, k+": failed to marshal patch body: "+marshalErr.Error())
 					continue
 				}
-				_, patchErr := client.Call("PATCH", "/vault/"+path, b,
-					map[string]string{
-						"Content-Type":             "application/json",
-						"Operation":                "replace",
-						"Target-Type":              "frontmatter",
-						"Target":                   k,
-						"Create-Target-If-Missing": "true",
-					})
+				_, patchErr := client.Call("PATCH", "/vault/"+path, body,
+					map[string]string{"Content-Type": "application/json"})
 				if patchErr != nil {
 					errs = append(errs, k+": "+patchErr.Error())
 				}
