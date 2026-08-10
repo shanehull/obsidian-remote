@@ -51,6 +51,14 @@ func encodeTarget(target, delimiter string) string {
 	return strings.Join(parts, delimiter)
 }
 
+func encodePath(p string) string {
+	parts := strings.Split(p, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
+}
+
 func unmarshalArgs(req *mcp.CallToolRequest) (map[string]any, error) {
 	var args map[string]any
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
@@ -365,13 +373,13 @@ func handleMoveNote(client *obsidian.Client) mcp.ToolHandler {
 		newPath = normalizePath(newPath)
 
 		headers := map[string]string{
-			"Destination": newPath,
+			"Destination": encodePath(newPath),
 		}
-		if allow := getStringArg(req, "allowOverwrite", ""); allow == "true" {
+		if getStringArg(req, "allowOverwrite", "") == "true" {
 			headers["Allow-Overwrite"] = "true"
 		}
 
-		_, err = client.Call("PATCH", "/vault/"+path, nil, headers)
+		_, err = client.Call("MOVE", "/vault/"+path, nil, headers)
 		if err != nil {
 			return errorResult(err.Error()), nil
 		}

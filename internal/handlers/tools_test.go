@@ -250,8 +250,8 @@ func TestHandleMoveNote(t *testing.T) {
 		if result.IsError {
 			t.Fatalf("expected success, got error: %v", getText(result))
 		}
-		if gotMethod != "PATCH" {
-			t.Fatalf("method = %q, want PATCH", gotMethod)
+		if gotMethod != "MOVE" {
+			t.Fatalf("method = %q, want MOVE", gotMethod)
 		}
 		if gotPath != "/vault/notes/old.md" {
 			t.Fatalf("path = %q, want /vault/notes/old.md", gotPath)
