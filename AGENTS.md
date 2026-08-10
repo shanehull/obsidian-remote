@@ -23,10 +23,10 @@ test/e2e_test.sh
 
 Go modules:
 ```bash
-go get -u github.com/mark3labs/mcp-go@latest && go mod tidy
+go get github.com/modelcontextprotocol/go-sdk@latest && go mod tidy
 ```
 
-Only bump direct deps (`mcp-go`). Transitive deps update automatically with `go mod tidy`.
+Only bump direct deps (`go-sdk`). Transitive deps update automatically with `go mod tidy`.
 
 mise (match Go version to `go.mod` directive):
 ```bash

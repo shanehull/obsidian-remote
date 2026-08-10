@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/shanehull/obsidian-remote/internal/config"
 	"github.com/shanehull/obsidian-remote/internal/obsidian"
 )
@@ -123,7 +124,8 @@ type buildTargetHeadersTestCase struct {
 
 func testBuildTargetHeadersCase(t *testing.T, tt buildTargetHeadersTestCase) {
 	t.Helper()
-	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: tt.args}}
+	rawArgs, _ := json.Marshal(tt.args)
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: rawArgs}}
 	headers, err := buildTargetHeaders(req)
 	if tt.wantErr {
 		if err == nil {
@@ -214,6 +216,18 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *obsidian.Client {
 	})
 }
 
+func mustMarshalArgs(args map[string]any) json.RawMessage {
+	data, err := json.Marshal(args)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func getText(result *mcp.CallToolResult) string {
+	return result.Content[0].(*mcp.TextContent).Text
+}
+
 func TestHandleMoveNote(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var gotMethod, gotPath, gotDest string
@@ -225,16 +239,16 @@ func TestHandleMoveNote(t *testing.T) {
 		})
 
 		handler := handleMoveNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":    "notes/old.md",
 			"newPath": "notes/new.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotMethod != "PATCH" {
 			t.Fatalf("method = %q, want PATCH", gotMethod)
@@ -245,8 +259,8 @@ func TestHandleMoveNote(t *testing.T) {
 		if gotDest != "notes/new.md" {
 			t.Fatalf("Destination = %q, want notes/new.md", gotDest)
 		}
-		if !strings.Contains(result.Content[0].(mcp.TextContent).Text, "Successfully moved") {
-			t.Fatalf("unexpected result text: %s", result.Content[0].(mcp.TextContent).Text)
+		if !strings.Contains(getText(result), "Successfully moved") {
+			t.Fatalf("unexpected result text: %s", getText(result))
 		}
 	})
 
@@ -258,17 +272,17 @@ func TestHandleMoveNote(t *testing.T) {
 		})
 
 		handler := handleMoveNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":           "notes/old.md",
 			"newPath":        "notes/exists.md",
 			"allowOverwrite": "true",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotOverwrite != "true" {
 			t.Fatalf("Allow-Overwrite = %q, want true", gotOverwrite)
@@ -277,9 +291,9 @@ func TestHandleMoveNote(t *testing.T) {
 
 	t.Run("missing path", func(t *testing.T) {
 		handler := handleMoveNote(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"newPath": "notes/new.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -291,9 +305,9 @@ func TestHandleMoveNote(t *testing.T) {
 
 	t.Run("missing newPath", func(t *testing.T) {
 		handler := handleMoveNote(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path": "notes/old.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -310,10 +324,10 @@ func TestHandleMoveNote(t *testing.T) {
 		})
 
 		handler := handleMoveNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":    "notes/missing.md",
 			"newPath": "notes/target.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -335,13 +349,13 @@ func TestHandleListNotes(t *testing.T) {
 		})
 
 		handler := handleListNotes(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotMethod != "GET" {
 			t.Fatalf("method = %q, want GET", gotMethod)
@@ -360,9 +374,9 @@ func TestHandleListNotes(t *testing.T) {
 		})
 
 		handler := handleListNotes(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"dirPath": "notes/sub",
-		}}}
+		})}}
 		_, _ = handler(context.Background(), req)
 		if gotPath != "/vault/notes/sub" {
 			t.Fatalf("path = %q, want /vault/notes/sub", gotPath)
@@ -375,7 +389,7 @@ func TestHandleListNotes(t *testing.T) {
 		})
 
 		handler := handleListNotes(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -397,15 +411,15 @@ func TestHandleReadNote(t *testing.T) {
 		})
 
 		handler := handleReadNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path": "notes/test.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotMethod != "GET" {
 			t.Fatalf("method = %q, want GET", gotMethod)
@@ -417,7 +431,7 @@ func TestHandleReadNote(t *testing.T) {
 
 	t.Run("missing path", func(t *testing.T) {
 		handler := handleReadNote(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -433,9 +447,9 @@ func TestHandleReadNote(t *testing.T) {
 		})
 
 		handler := handleReadNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path": "notes/missing.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -456,15 +470,15 @@ func TestHandleDeleteNote(t *testing.T) {
 		})
 
 		handler := handleDeleteNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path": "notes/test.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotMethod != "DELETE" {
 			t.Fatalf("method = %q, want DELETE", gotMethod)
@@ -476,7 +490,7 @@ func TestHandleDeleteNote(t *testing.T) {
 
 	t.Run("missing path", func(t *testing.T) {
 		handler := handleDeleteNote(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -492,9 +506,9 @@ func TestHandleDeleteNote(t *testing.T) {
 		})
 
 		handler := handleDeleteNote(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path": "notes/missing.md",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -516,15 +530,15 @@ func TestHandleGlobalSearch(t *testing.T) {
 		})
 
 		handler := handleGlobalSearch(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"query": "test",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if gotMethod != "POST" {
 			t.Fatalf("method = %q, want POST", gotMethod)
@@ -536,7 +550,7 @@ func TestHandleGlobalSearch(t *testing.T) {
 
 	t.Run("missing query", func(t *testing.T) {
 		handler := handleGlobalSearch(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -567,18 +581,18 @@ func TestHandleSearchReplace(t *testing.T) {
 		})
 
 		handler := handleSearchReplace(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":    "notes/test.md",
 			"search":  "hello",
 			"replace": "hi",
-			"count":   -1.0,
-		}}}
+			"count":   float64(-1),
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if !getCalled || !putCalled {
 			t.Fatal("expected both GET and PUT calls")
@@ -595,11 +609,11 @@ func TestHandleSearchReplace(t *testing.T) {
 		})
 
 		handler := handleSearchReplace(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":    "notes/test.md",
 			"search":  "xyz",
 			"replace": "hi",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -611,7 +625,7 @@ func TestHandleSearchReplace(t *testing.T) {
 
 	t.Run("missing params", func(t *testing.T) {
 		handler := handleSearchReplace(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -640,17 +654,17 @@ func TestHandleManageTags(t *testing.T) {
 		})
 
 		handler := handleManageTags(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":      "notes/test.md",
 			"operation": "add",
 			"tag":       "newtag",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if patchBody != `["existing","newtag"]` {
 			t.Fatalf("patchBody = %q, want [\"existing\",\"newtag\"]", patchBody)
@@ -674,17 +688,17 @@ func TestHandleManageTags(t *testing.T) {
 		})
 
 		handler := handleManageTags(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":      "notes/test.md",
 			"operation": "remove",
 			"tag":       "a",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if patchBody != `["b"]` {
 			t.Fatalf("patchBody = %q, want [\"b\"]", patchBody)
@@ -693,11 +707,11 @@ func TestHandleManageTags(t *testing.T) {
 
 	t.Run("invalid operation", func(t *testing.T) {
 		handler := handleManageTags(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":      "notes/test.md",
 			"operation": "invalid",
 			"tag":       "x",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -709,7 +723,7 @@ func TestHandleManageTags(t *testing.T) {
 
 	t.Run("missing params", func(t *testing.T) {
 		handler := handleManageTags(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -729,16 +743,16 @@ func TestHandleManageFrontmatter(t *testing.T) {
 		})
 
 		handler := handleManageFrontmatter(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":      "notes/test.md",
 			"operation": "get",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 	})
 
@@ -751,17 +765,17 @@ func TestHandleManageFrontmatter(t *testing.T) {
 		})
 
 		handler := handleManageFrontmatter(client)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":        "notes/test.md",
 			"operation":   "set",
 			"jsonPayload": `{"title":"hello"}`,
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if result.IsError {
-			t.Fatalf("expected success, got error: %v", result.Content[0].(mcp.TextContent).Text)
+			t.Fatalf("expected success, got error: %v", getText(result))
 		}
 		if patchMethod != "PATCH" {
 			t.Fatalf("method = %q, want PATCH", patchMethod)
@@ -773,11 +787,11 @@ func TestHandleManageFrontmatter(t *testing.T) {
 
 	t.Run("set with invalid json", func(t *testing.T) {
 		handler := handleManageFrontmatter(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":        "notes/test.md",
 			"operation":   "set",
 			"jsonPayload": `not json`,
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -789,10 +803,10 @@ func TestHandleManageFrontmatter(t *testing.T) {
 
 	t.Run("invalid operation", func(t *testing.T) {
 		handler := handleManageFrontmatter(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
 			"path":      "notes/test.md",
 			"operation": "delete",
-		}}}
+		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -804,7 +818,7 @@ func TestHandleManageFrontmatter(t *testing.T) {
 
 	t.Run("missing params", func(t *testing.T) {
 		handler := handleManageFrontmatter(nil)
-		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{}}}
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

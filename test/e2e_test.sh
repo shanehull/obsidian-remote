@@ -44,7 +44,7 @@ while true; do
 
   if [ "$mcp_ok" = false ]; then
     sse=$(curl -s --max-time 3 http://localhost:4000/sse 2>/dev/null || true)
-    echo "$sse" | grep -q "sessionId" && mcp_ok=true
+    echo "$sse" | grep -q "sessionid" && mcp_ok=true
   fi
 
   [ "$auto_trust_ok" = true ] && [ "$mcp_ok" = true ] \
@@ -82,14 +82,27 @@ echo "=== Test 3: Create and read note via MCP bridge ==="
 curl -s -N http://localhost:4000/sse > "$SSE_LOG" &
 SSE_PID=$!
 sleep 2
-session=$(grep -o 'sessionId=[a-f0-9-]*' "$SSE_LOG" | head -1)
+session=$(grep -o 'sessionid=[^ ]*' "$SSE_LOG" | head -1 | sed 's/sessionid=//')
 [ -n "$session" ] || { echo "FAIL: no sessionId"; kill "$SSE_PID" 2>/dev/null; exit 1; }
 echo "sessionId: $session"
+
+# Complete MCP initialization handshake
+echo "--- Initializing session ---"
+: > "$SSE_LOG"
+curl -s "http://localhost:4000/sse?sessionid=${session}" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"e2e","version":"1.0.0"}}}'
+sleep 2
+curl -s "http://localhost:4000/sse?sessionid=${session}" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}'
+sleep 1
+echo "PASS: session initialized"
 
 mcp_call() {
   local id=$1 method=$2 params=$3
   : > "$SSE_LOG"
-  curl -s "http://localhost:4000/message?${session}" \
+  curl -s "http://localhost:4000/sse?sessionid=${session}" \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":${id},\"method\":\"tools/call\",\"params\":${params}}"
   sleep 2
