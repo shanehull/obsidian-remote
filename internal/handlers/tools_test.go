@@ -152,7 +152,7 @@ func TestBuildTargetHeaders(t *testing.T) {
 		{"no_targeting", map[string]any{}, true, false, nil},
 		{"heading_target", map[string]any{
 			"target_type": "heading", "target": "My Section",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "My Section"}},
+		}, false, false, map[string]string{"Target-Type": "heading", "Target": "My%20Section"}},
 		{"with_scope", map[string]any{
 			"target_type": "heading", "target": "Heading", "target_scope": "content",
 		}, false, false, map[string]string{"Target-Type": "heading", "Target": "Heading", "Target-Scope": "content"}},

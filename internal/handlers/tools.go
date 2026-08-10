@@ -40,6 +40,17 @@ func normalizePath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
 }
 
+func encodeTarget(target, delimiter string) string {
+	if delimiter == "" {
+		delimiter = "::"
+	}
+	parts := strings.Split(target, delimiter)
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, delimiter)
+}
+
 func unmarshalArgs(req *mcp.CallToolRequest) (map[string]any, error) {
 	var args map[string]any
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
@@ -176,9 +187,10 @@ func buildTargetHeaders(req *mcp.CallToolRequest) (map[string]string, error) {
 	if !validTargetTypes[targetType] {
 		return nil, fmt.Errorf("target_type must be 'heading', 'block', or 'frontmatter'")
 	}
+	delimiter := getStringArg(req, "target_delimiter", "")
 	headers := map[string]string{
 		"Target-Type": targetType,
-		"Target":      target,
+		"Target":      encodeTarget(target, delimiter),
 	}
 	if scope := getStringArg(req, "target_scope", ""); scope != "" {
 		if !validTargetScopes[scope] {
@@ -186,7 +198,7 @@ func buildTargetHeaders(req *mcp.CallToolRequest) (map[string]string, error) {
 		}
 		headers["Target-Scope"] = scope
 	}
-	if delimiter := getStringArg(req, "target_delimiter", ""); delimiter != "" {
+	if delimiter != "" {
 		headers["Target-Delimiter"] = delimiter
 	}
 	addBoolTargetHeaders(headers, req)
