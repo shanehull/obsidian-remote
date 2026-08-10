@@ -1,11 +1,12 @@
 # Stage 1: Build the Go MCP Server (Bridge)
 FROM golang:1.26 AS builder
+ARG VERSION=dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-RUN CGO_ENABLED=0 go build -o server ./cmd/server/main.go
+RUN CGO_ENABLED=0 go build -ldflags="-X main.version=${VERSION}" -o server ./cmd/server/main.go
 
 # Stage 2: Unified Headless Container
 FROM lscr.io/linuxserver/obsidian:v1.12.7-ls130

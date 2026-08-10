@@ -76,5 +76,7 @@ jobs:
           push: true
           tags: ${{ steps.meta-tag.outputs.tags }}
           labels: ${{ steps.meta-tag.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

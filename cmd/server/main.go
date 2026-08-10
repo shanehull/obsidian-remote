@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/MicahParks/keyfunc/v2"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/shanehull/obsidian-remote/internal/config"
 	"github.com/shanehull/obsidian-remote/internal/handlers"
 	"github.com/shanehull/obsidian-remote/internal/middleware"
 	"github.com/shanehull/obsidian-remote/internal/obsidian"
 )
+
+var version = "dev"
 
 func main() {
 	// Initialize structured logger
@@ -25,7 +27,7 @@ func main() {
 	cfg := config.Load()
 	obsClient := obsidian.NewClient(cfg)
 
-	s := server.NewMCPServer("Obsidian Remote (Go)", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{Name: "Obsidian Remote (Go)", Version: version}, nil)
 	handlers.RegisterTools(s, obsClient)
 
 	var jwks *keyfunc.JWKS
@@ -39,8 +41,10 @@ func main() {
 		}
 	}
 
-	sse := server.NewSSEServer(s, server.WithBaseURL(cfg.PublicHost))
-	streamable := server.NewStreamableHTTPServer(s)
+	getServer := func(_ *http.Request) *mcp.Server { return s }
+
+	sse := mcp.NewSSEHandler(getServer, nil)
+	streamable := mcp.NewStreamableHTTPHandler(getServer, nil)
 
 	// Auth Middleware
 	auth := middleware.Auth(cfg, jwks)
@@ -75,9 +79,8 @@ func main() {
 	slog.Info("server stopped")
 }
 
-func registerHTTPHandlers(mux *http.ServeMux, cfg *config.Config, sse *server.SSEServer, streamable *server.StreamableHTTPServer, auth func(http.Handler) http.Handler) {
-	mux.Handle("/sse", auth(sse.SSEHandler()))
-	mux.Handle("/message", auth(sse.MessageHandler()))
+func registerHTTPHandlers(mux *http.ServeMux, cfg *config.Config, sse *mcp.SSEHandler, streamable *mcp.StreamableHTTPHandler, auth func(http.Handler) http.Handler) {
+	mux.Handle("/sse", auth(sse))
 	mux.Handle("/mcp", auth(streamable))
 
 	// RFC 9728 Discovery (prefix match)

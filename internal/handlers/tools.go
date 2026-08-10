@@ -7,12 +7,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/shanehull/obsidian-remote/internal/obsidian"
 )
 
-func RegisterTools(s *server.MCPServer, client *obsidian.Client) {
+func RegisterTools(s *mcp.Server, client *obsidian.Client) {
 	registerListNotes(s, client)
 	registerReadNote(s, client)
 	registerUpdateNote(s, client)
@@ -40,62 +40,133 @@ func normalizePath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(path, "/"), "/")
 }
 
-func handleListNotes(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		subDir := normalizePath(req.GetString("dirPath", ""))
-		res, err := client.Call("GET", "/vault/"+subDir, nil)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+func unmarshalArgs(req *mcp.CallToolRequest) (map[string]any, error) {
+	var args map[string]any
+	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+		return nil, err
+	}
+	return args, nil
+}
+
+func getStringArg(req *mcp.CallToolRequest, key, defaultVal string) string {
+	args, _ := unmarshalArgs(req)
+	if v, ok := args[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
 		}
-		return mcp.NewToolResultText(string(res)), nil
+	}
+	return defaultVal
+}
+
+func requireStringArg(req *mcp.CallToolRequest, key string) (string, error) {
+	args, err := unmarshalArgs(req)
+	if err != nil {
+		return "", err
+	}
+	v, ok := args[key]
+	if !ok {
+		return "", fmt.Errorf("missing required parameter: %s", key)
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("parameter %s must be a string", key)
+	}
+	return s, nil
+}
+
+func getIntArg(req *mcp.CallToolRequest, key string, defaultVal int) int {
+	args, _ := unmarshalArgs(req)
+	if v, ok := args[key]; ok {
+		switch n := v.(type) {
+		case float64:
+			return int(n)
+		}
+	}
+	return defaultVal
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func textResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
 	}
 }
 
-func registerListNotes(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("list_notes",
-		mcp.WithDescription("List files in the vault"),
-		mcp.WithString("dirPath", mcp.Description("Subdirectory")),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-	), handleListNotes(client))
+func errorResult(msg string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
+	}
 }
 
-func handleReadNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleListNotes(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		subDir := normalizePath(getStringArg(req, "dirPath", ""))
+		res, err := client.Call("GET", "/vault/"+subDir, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
+		}
+		return textResult(string(res)), nil
+	}
+}
+
+func registerListNotes(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "list_notes",
+		Description: "List files and directories in the vault. Use dirPath to list a specific subdirectory. Returns an array of filenames.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"dirPath": {Type: "string", Description: "Subdirectory"},
+			},
+		},
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: boolPtr(false)},
+	}, handleListNotes(client))
+}
+
+func handleReadNote(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
+		if err != nil {
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
 
 		headers, headerErr := buildTargetHeaders(req)
 		if headerErr != nil {
-			return mcp.NewToolResultError(headerErr.Error()), nil
+			return errorResult(headerErr.Error()), nil
 		}
 		res, err := client.Call("GET", "/vault/"+path, nil, headers)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(res)), nil
+		return textResult(string(res)), nil
 	}
 }
 
-func registerReadNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("read_note",
-		mcp.WithDescription("Read a note"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
-		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
-		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
-		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-	), handleReadNote(client))
+func registerReadNote(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "read_note",
+		Description: "Read a note or a specific section within it. Use target_type=heading with target=heading text to read one section, target_type=block for block references, or target_type=frontmatter for a YAML key. Omitting target returns the full note.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":             {Type: "string"},
+				"target_type":      {Type: "string", Description: "Section type: heading, block, or frontmatter"},
+				"target":           {Type: "string", Description: "Heading text, block reference, or frontmatter key"},
+				"target_scope":     {Type: "string", Description: "Scope for heading/block targets: content, marker, or markerAndContent"},
+				"target_delimiter": {Type: "string", Description: "Delimiter for nested headings (default: ::)"},
+			},
+			Required: []string{"path"},
+		},
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: boolPtr(false)},
+	}, handleReadNote(client))
 }
 
-func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
-	targetType := req.GetString("target_type", "")
-	target := req.GetString("target", "")
+func buildTargetHeaders(req *mcp.CallToolRequest) (map[string]string, error) {
+	targetType := getStringArg(req, "target_type", "")
+	target := getStringArg(req, "target", "")
 	if targetType == "" && target == "" {
 		return nil, nil
 	}
@@ -109,20 +180,20 @@ func buildTargetHeaders(req mcp.CallToolRequest) (map[string]string, error) {
 		"Target-Type": targetType,
 		"Target":      target,
 	}
-	if scope := req.GetString("target_scope", ""); scope != "" {
+	if scope := getStringArg(req, "target_scope", ""); scope != "" {
 		if !validTargetScopes[scope] {
 			return nil, fmt.Errorf("target_scope must be 'content', 'marker', or 'markerAndContent'")
 		}
 		headers["Target-Scope"] = scope
 	}
-	if delimiter := req.GetString("target_delimiter", ""); delimiter != "" {
+	if delimiter := getStringArg(req, "target_delimiter", ""); delimiter != "" {
 		headers["Target-Delimiter"] = delimiter
 	}
 	addBoolTargetHeaders(headers, req)
 	return headers, nil
 }
 
-func addBoolTargetHeaders(headers map[string]string, req mcp.CallToolRequest) {
+func addBoolTargetHeaders(headers map[string]string, req *mcp.CallToolRequest) {
 	for _, opt := range []struct {
 		field string
 		key   string
@@ -131,7 +202,7 @@ func addBoolTargetHeaders(headers map[string]string, req mcp.CallToolRequest) {
 		{"reject_if_content_preexists", "Reject-If-Content-Preexists"},
 		{"trim_target_whitespace", "Trim-Target-Whitespace"},
 	} {
-		if req.GetString(opt.field, "") == "true" {
+		if getStringArg(req, opt.field, "") == "true" {
 			headers[opt.key] = "true"
 		}
 	}
@@ -167,19 +238,19 @@ type updateNoteParams struct {
 	headers map[string]string
 }
 
-func parseUpdateNote(req mcp.CallToolRequest) (*updateNoteParams, error) {
-	path, err := req.RequireString("path")
+func parseUpdateNote(req *mcp.CallToolRequest) (*updateNoteParams, error) {
+	path, err := requireStringArg(req, "path")
 	if err != nil {
 		return nil, err
 	}
 	path = normalizePath(path)
-	content, err := req.RequireString("content")
+	content, err := requireStringArg(req, "content")
 	if err != nil {
 		return nil, err
 	}
-	op := req.GetString("operation", "replace")
-	targetType := req.GetString("target_type", "")
-	target := req.GetString("target", "")
+	op := getStringArg(req, "operation", "replace")
+	targetType := getStringArg(req, "target_type", "")
+	target := getStringArg(req, "target", "")
 	hasTarget := targetType != "" && target != ""
 
 	method, err := resolveUpdateMethod(op, hasTarget)
@@ -200,71 +271,83 @@ func parseUpdateNote(req mcp.CallToolRequest) (*updateNoteParams, error) {
 	return &updateNoteParams{path, content, op, method, headers}, nil
 }
 
-func handleUpdateNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleUpdateNote(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		params, err := parseUpdateNote(req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		_, err = client.Call(params.method, "/vault/"+params.path, []byte(params.content), params.headers)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully %sed note: %s", params.op, params.path)), nil
+		return textResult(fmt.Sprintf("Successfully %sed note: %s", params.op, params.path)), nil
 	}
 }
 
-func registerUpdateNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("update_note",
-		mcp.WithDescription("Create, update, or append content within a note"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("content", mcp.Required()),
-		mcp.WithString("operation", mcp.Description("replace (default), append, or prepend")),
-		mcp.WithString("target_type", mcp.Description("Section type: heading, block, or frontmatter")),
-		mcp.WithString("target", mcp.Description("Heading text, block reference, or frontmatter key")),
-		mcp.WithString("target_scope", mcp.Description("Scope for heading/block targets: content, marker, or markerAndContent")),
-		mcp.WithString("target_delimiter", mcp.Description("Delimiter for nested headings (default: ::)")),
-		mcp.WithString("create_target_if_missing", mcp.Description("Create the target if it does not exist (true or false)")),
-		mcp.WithString("reject_if_content_preexists", mcp.Description("Reject if target already has content (true or false)")),
-		mcp.WithString("trim_target_whitespace", mcp.Description("Trim whitespace from target content before operation (true or false)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleUpdateNote(client))
+func registerUpdateNote(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "update_note",
+		Description: "Create, update, or append content within a note. Read the note first with read_note, show the current content to the user as a preview of what will change, and confirm before making any modifications.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":                         {Type: "string"},
+				"content":                      {Type: "string"},
+				"operation":                    {Type: "string", Description: "replace (default), append, or prepend"},
+				"target_type":                  {Type: "string", Description: "Section type: heading, block, or frontmatter"},
+				"target":                       {Type: "string", Description: "Heading text, block reference, or frontmatter key"},
+				"target_scope":                 {Type: "string", Description: "Scope for heading/block targets: content, marker, or markerAndContent"},
+				"target_delimiter":             {Type: "string", Description: "Delimiter for nested headings (default: ::)"},
+				"create_target_if_missing":     {Type: "string", Description: "Create the target if it does not exist (true or false)"},
+				"reject_if_content_preexists":  {Type: "string", Description: "Reject if target already has content (true or false)"},
+				"trim_target_whitespace":       {Type: "string", Description: "Trim whitespace from target content before operation (true or false)"},
+			},
+			Required: []string{"path", "content"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleUpdateNote(client))
 }
 
-func handleDeleteNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleDeleteNote(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
 		_, err = client.Call("DELETE", "/vault/"+path, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully deleted note: %s", path)), nil
+		return textResult(fmt.Sprintf("Successfully deleted note: %s", path)), nil
 	}
 }
 
-func registerDeleteNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("delete_note",
-		mcp.WithDescription("Permanently delete a note from the vault"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note to delete")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleDeleteNote(client))
+func registerDeleteNote(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "delete_note",
+		Description: "Permanently delete a note from the vault. This cannot be undone. Read the note first with read_note, show its content to the user, and confirm before deleting.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path": {Type: "string", Description: "Path to the note to delete"},
+			},
+			Required: []string{"path"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleDeleteNote(client))
 }
 
-func handleMoveNote(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleMoveNote(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		newPath, err := req.RequireString("newPath")
+		newPath, err := requireStringArg(req, "newPath")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
 		newPath = normalizePath(newPath)
@@ -272,77 +355,89 @@ func handleMoveNote(client *obsidian.Client) func(context.Context, mcp.CallToolR
 		headers := map[string]string{
 			"Destination": newPath,
 		}
-		if allow := req.GetString("allowOverwrite", ""); allow == "true" {
+		if allow := getStringArg(req, "allowOverwrite", ""); allow == "true" {
 			headers["Allow-Overwrite"] = "true"
 		}
 
 		_, err = client.Call("PATCH", "/vault/"+path, nil, headers)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully moved note from %s to %s", path, newPath)), nil
+		return textResult(fmt.Sprintf("Successfully moved note from %s to %s", path, newPath)), nil
 	}
 }
 
-func registerMoveNote(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("move_note",
-		mcp.WithDescription("Move/rename a note to a new path"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Current path of the note")),
-		mcp.WithString("newPath", mcp.Required(), mcp.Description("New path for the note")),
-		mcp.WithString("allowOverwrite", mcp.Description("Allow overwrite if destination exists (true or false, default false)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleMoveNote(client))
+func registerMoveNote(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "move_note",
+		Description: "Move or rename a note. Read the source note first with read_note, show it to the user, and confirm before moving. Read the destination note first if allowOverwrite is true to avoid accidental overwrite.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":           {Type: "string", Description: "Current path of the note"},
+				"newPath":        {Type: "string", Description: "New path for the note"},
+				"allowOverwrite": {Type: "string", Description: "Allow overwrite if destination exists (true or false, default false)"},
+			},
+			Required: []string{"path", "newPath"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleMoveNote(client))
 }
 
-func handleGlobalSearch(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, err := req.RequireString("query")
+func handleGlobalSearch(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		query, err := requireStringArg(req, "query")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		res, err := client.Call("POST", "/search/simple/?query="+url.QueryEscape(query), nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		return mcp.NewToolResultText(string(res)), nil
+		return textResult(string(res)), nil
 	}
 }
 
-func registerGlobalSearch(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("global_search",
-		mcp.WithDescription("Search for text across all notes"),
-		mcp.WithString("query", mcp.Required()),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-	), handleGlobalSearch(client))
+func registerGlobalSearch(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "global_search",
+		Description: "Search for text across all notes",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"query": {Type: "string"},
+			},
+			Required: []string{"query"},
+		},
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: boolPtr(false)},
+	}, handleGlobalSearch(client))
 }
 
-func handleSearchReplace(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleSearchReplace(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
-		search, err := req.RequireString("search")
+		search, err := requireStringArg(req, "search")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		replace, err := req.RequireString("replace")
+		replace, err := requireStringArg(req, "replace")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		count := req.GetInt("count", 1)
+		count := getIntArg(req, "count", 1)
 
 		content, err := client.Call("GET", "/vault/"+path, nil)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 
 		original := string(content)
 		if !strings.Contains(original, search) {
-			return mcp.NewToolResultError("search text not found in note"), nil
+			return errorResult("search text not found in note"), nil
 		}
 
 		updated := strings.Replace(original, search, replace, count)
@@ -353,23 +448,29 @@ func handleSearchReplace(client *obsidian.Client) func(context.Context, mcp.Call
 		}
 
 		if _, err := client.Call("PUT", "/vault/"+path, []byte(updated)); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", replaced, path)), nil
+		return textResult(fmt.Sprintf("Successfully replaced %d occurrence(s) in %s", replaced, path)), nil
 	}
 }
 
-func registerSearchReplace(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("search_replace",
-		mcp.WithDescription("Search and replace text within a specific note"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
-		mcp.WithString("search", mcp.Required(), mcp.Description("Text to find")),
-		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text")),
-		mcp.WithNumber("count", mcp.Description("Maximum occurrences to replace (default: 1, set to -1 for all)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleSearchReplace(client))
+func registerSearchReplace(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "search_replace",
+		Description: "Search and replace text within a note. Read the note first with read_note, show the matching text to the user, and confirm before replacing. Replaces only within a single note.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":    {Type: "string", Description: "Path to the note"},
+				"search":  {Type: "string", Description: "Text to find"},
+				"replace": {Type: "string", Description: "Replacement text"},
+				"count":   {Type: "number", Description: "Maximum occurrences to replace (default: 1, set to -1 for all)"},
+			},
+			Required: []string{"path", "search", "replace"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleSearchReplace(client))
 }
 
 func normalizeTags(tags []string) []string {
@@ -405,38 +506,38 @@ func removeTagFromSlice(tags []string, tag string) ([]string, bool) {
 	return filtered, true
 }
 
-func handleManageTags(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleManageTags(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
-		op, err := req.RequireString("operation")
+		op, err := requireStringArg(req, "operation")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
-		tag, err := req.RequireString("tag")
+		tag, err := requireStringArg(req, "tag")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		tag = strings.TrimPrefix(tag, "#")
 
 		if op != "add" && op != "remove" {
-			return mcp.NewToolResultError("operation must be 'add' or 'remove'"), nil
+			return errorResult("operation must be 'add' or 'remove'"), nil
 		}
 
 		res, err := client.Call("GET", "/vault/"+path, nil,
 			map[string]string{"Accept": "application/vnd.olrapi.note+json"})
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 
 		var note struct {
 			Tags []string `json:"tags"`
 		}
 		if jsonErr := json.Unmarshal(res, &note); jsonErr != nil {
-			return mcp.NewToolResultError("failed to parse note metadata: " + jsonErr.Error()), nil
+			return errorResult("failed to parse note metadata: " + jsonErr.Error()), nil
 		}
 
 		tags := normalizeTags(note.Tags)
@@ -446,18 +547,18 @@ func handleManageTags(client *obsidian.Client) func(context.Context, mcp.CallToo
 		case "add":
 			tags, ok = addTagToSlice(tags, tag)
 			if !ok {
-				return mcp.NewToolResultText(fmt.Sprintf("Tag '%s' already exists in %s", tag, path)), nil
+				return textResult(fmt.Sprintf("Tag '%s' already exists in %s", tag, path)), nil
 			}
 		case "remove":
 			tags, ok = removeTagFromSlice(tags, tag)
 			if !ok {
-				return mcp.NewToolResultError(fmt.Sprintf("Tag '%s' not found in %s", tag, path)), nil
+				return errorResult(fmt.Sprintf("Tag '%s' not found in %s", tag, path)), nil
 			}
 		}
 
 		tagsJSON, err := json.Marshal(tags)
 		if err != nil {
-			return mcp.NewToolResultError("failed to marshal tags: " + err.Error()), nil
+			return errorResult("failed to marshal tags: " + err.Error()), nil
 		}
 		if _, err := client.Call("PATCH", "/vault/"+path, tagsJSON,
 			map[string]string{
@@ -467,58 +568,64 @@ func handleManageTags(client *obsidian.Client) func(context.Context, mcp.CallToo
 				"Target":                   "tags",
 				"Create-Target-If-Missing": "true",
 			}); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 
 		msg := fmt.Sprintf("Successfully added tag '%s' to %s", tag, path)
 		if op == "remove" {
 			msg = fmt.Sprintf("Successfully removed tag '%s' from %s", tag, path)
 		}
-		return mcp.NewToolResultText(msg), nil
+		return textResult(msg), nil
 	}
 }
 
-func registerManageTags(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("manage_tags",
-		mcp.WithDescription("Add or remove tags from a note's frontmatter"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Path to the note")),
-		mcp.WithString("operation", mcp.Required(), mcp.Description("add or remove")),
-		mcp.WithString("tag", mcp.Required(), mcp.Description("Tag value (without leading #)")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleManageTags(client))
+func registerManageTags(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "manage_tags",
+		Description: "Add or remove tags from a note's frontmatter. Use read_note or manage_frontmatter with operation=get to view the current tags first, show them to the user, and confirm before modifying.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":      {Type: "string", Description: "Path to the note"},
+				"operation": {Type: "string", Description: "add or remove"},
+				"tag":       {Type: "string", Description: "Tag value (without leading #)"},
+			},
+			Required: []string{"path", "operation", "tag"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleManageTags(client))
 }
 
-func handleManageFrontmatter(client *obsidian.Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		path, err := req.RequireString("path")
+func handleManageFrontmatter(client *obsidian.Client) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path, err := requireStringArg(req, "path")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 		path = normalizePath(path)
-		op, err := req.RequireString("operation")
+		op, err := requireStringArg(req, "operation")
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return errorResult(err.Error()), nil
 		}
 
 		if op == "get" {
 			res, err := client.Call("GET", "/vault/"+path, nil,
 				map[string]string{"Accept": "application/vnd.olrapi.note+json"})
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return errorResult(err.Error()), nil
 			}
-			return mcp.NewToolResultText(string(res)), nil
+			return textResult(string(res)), nil
 		}
 
 		if op == "set" {
-			payload, err := req.RequireString("jsonPayload")
+			payload, err := requireStringArg(req, "jsonPayload")
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return errorResult(err.Error()), nil
 			}
 
-			var kvs map[string]interface{}
+			var kvs map[string]any
 			if jsonErr := json.Unmarshal([]byte(payload), &kvs); jsonErr != nil {
-				return mcp.NewToolResultError("jsonPayload must be a valid JSON object: " + jsonErr.Error()), nil
+				return errorResult("jsonPayload must be a valid JSON object: " + jsonErr.Error()), nil
 			}
 
 			var errs []string
@@ -541,22 +648,28 @@ func handleManageFrontmatter(client *obsidian.Client) func(context.Context, mcp.
 				}
 			}
 			if len(errs) > 0 {
-				return mcp.NewToolResultError("errors: " + strings.Join(errs, "; ")), nil
+				return errorResult("errors: " + strings.Join(errs, "; ")), nil
 			}
-			return mcp.NewToolResultText(fmt.Sprintf("Successfully updated frontmatter for: %s", path)), nil
+			return textResult(fmt.Sprintf("Successfully updated frontmatter for: %s", path)), nil
 		}
 
-		return mcp.NewToolResultError("Invalid operation. Use 'get' or 'set'."), nil
+		return errorResult("Invalid operation. Use 'get' or 'set'."), nil
 	}
 }
 
-func registerManageFrontmatter(s *server.MCPServer, client *obsidian.Client) {
-	s.AddTool(mcp.NewTool("manage_frontmatter",
-		mcp.WithDescription("Get or set YAML frontmatter keys"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("operation", mcp.Required(), mcp.Description("get or set")),
-		mcp.WithString("jsonPayload", mcp.Description("JSON object of keys to set (required for 'set')")),
-		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
-	), handleManageFrontmatter(client))
+func registerManageFrontmatter(s *mcp.Server, client *obsidian.Client) {
+	s.AddTool(&mcp.Tool{
+		Name:        "manage_frontmatter",
+		Description: "Get or set YAML frontmatter keys. Use operation=get first to read the current frontmatter, show it to the user, and confirm before using operation=set to make changes.",
+		InputSchema: &jsonschema.Schema{
+			Type: "object",
+			Properties: map[string]*jsonschema.Schema{
+				"path":        {Type: "string"},
+				"operation":   {Type: "string", Description: "get or set"},
+				"jsonPayload": {Type: "string", Description: "JSON object of keys to set (required for 'set')"},
+			},
+			Required: []string{"path", "operation"},
+		},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	}, handleManageFrontmatter(client))
 }
