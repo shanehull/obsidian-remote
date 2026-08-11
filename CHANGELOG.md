@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/shanehull/obsidian-remote/compare/v1.1.1...v1.2.0) (2026-08-11)
+
+
+### Features
+
+* swap mcp-go for official go-sdk and enrich tool descriptions ([#39](https://github.com/shanehull/obsidian-remote/issues/39)) ([74ab110](https://github.com/shanehull/obsidian-remote/commit/74ab110ad9c21fe57eada93caedb1eaea499c986))
+
+
+### Bug Fixes
+
+* migrate to non-deprecated targeting, add E2E coverage ([#43](https://github.com/shanehull/obsidian-remote/issues/43)) ([9d5efbd](https://github.com/shanehull/obsidian-remote/commit/9d5efbd784541dfcbdca0794b0ef0a9cdf9f98d9))
+* URL-encode Target header for non-ASCII heading support ([#41](https://github.com/shanehull/obsidian-remote/issues/41)) ([5995bce](https://github.com/shanehull/obsidian-remote/commit/5995bcebe0eddfc99c76f0969ddd49fbb1b004da))
+* use MOVE method for move_note instead of PATCH ([#42](https://github.com/shanehull/obsidian-remote/issues/42)) ([a28e3f4](https://github.com/shanehull/obsidian-remote/commit/a28e3f46b43d8347e8073db31bd10b32954773a2))
+
 ## [1.1.1](https://github.com/shanehull/obsidian-remote/compare/v1.1.0...v1.1.1) (2026-06-13)
 
 
