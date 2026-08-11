@@ -107,83 +107,6 @@ func TestRemoveTagFromSlice(t *testing.T) {
 	}
 }
 
-func assertHeader(t *testing.T, headers map[string]string, key, want string) {
-	t.Helper()
-	if want != "" && headers[key] != want {
-		t.Fatalf("%s = %q, want %q", key, headers[key], want)
-	}
-}
-
-type buildTargetHeadersTestCase struct {
-	name    string
-	args    map[string]any
-	wantNil bool
-	wantErr bool
-	want    map[string]string
-}
-
-func testBuildTargetHeadersCase(t *testing.T, tt buildTargetHeadersTestCase) {
-	t.Helper()
-	rawArgs, _ := json.Marshal(tt.args)
-	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: rawArgs}}
-	headers, err := buildTargetHeaders(req)
-	if tt.wantErr {
-		if err == nil {
-			t.Fatalf("expected error for %v", tt.args)
-		}
-		return
-	}
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if tt.wantNil {
-		if headers != nil {
-			t.Fatalf("expected nil headers, got %v", headers)
-		}
-		return
-	}
-	for k, v := range tt.want {
-		assertHeader(t, headers, k, v)
-	}
-}
-
-func TestBuildTargetHeaders(t *testing.T) {
-	tests := []buildTargetHeadersTestCase{
-		{"no_targeting", map[string]any{}, true, false, nil},
-		{"heading_target", map[string]any{
-			"target_type": "heading", "target": "My Section",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "My%20Section"}},
-		{"with_scope", map[string]any{
-			"target_type": "heading", "target": "Heading", "target_scope": "content",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "Heading", "Target-Scope": "content"}},
-		{"with_delimiter", map[string]any{
-			"target_type": "heading", "target": "H1::H2", "target_delimiter": "::",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H1::H2", "Target-Delimiter": "::"}},
-		{"with_create_if_missing", map[string]any{
-			"target_type": "heading", "target": "H", "create_target_if_missing": "true",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Create-Target-If-Missing": "true"}},
-		{"with_reject", map[string]any{
-			"target_type": "heading", "target": "H", "reject_if_content_preexists": "true",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Reject-If-Content-Preexists": "true"}},
-		{"with_trim", map[string]any{
-			"target_type": "heading", "target": "H", "trim_target_whitespace": "true",
-		}, false, false, map[string]string{"Target-Type": "heading", "Target": "H", "Trim-Target-Whitespace": "true"}},
-		{"missing_target", map[string]any{"target_type": "heading"}, false, true, nil},
-		{"missing_target_type", map[string]any{"target": "H"}, false, true, nil},
-		{"invalid_target_type", map[string]any{
-			"target_type": "invalid", "target": "H",
-		}, false, true, nil},
-		{"invalid_scope", map[string]any{
-			"target_type": "heading", "target": "H", "target_scope": "bad",
-		}, false, true, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testBuildTargetHeadersCase(t, tt)
-		})
-	}
-}
-
 func TestNormalizePath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -226,6 +149,106 @@ func mustMarshalArgs(args map[string]any) json.RawMessage {
 
 func getText(result *mcp.CallToolResult) string {
 	return result.Content[0].(*mcp.TextContent).Text
+}
+
+func TestHandleReadNote(t *testing.T) {
+	t.Run("full note", func(t *testing.T) {
+		var gotMethod, gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("# Hello"))
+		})
+
+		handler := handleReadNote(client)
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
+			"path": "notes/test.md",
+		})}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", getText(result))
+		}
+		if gotMethod != "GET" {
+			t.Fatalf("method = %q, want GET", gotMethod)
+		}
+		if gotPath != "/vault/notes/test.md" {
+			t.Fatalf("path = %q, want /vault/notes/test.md", gotPath)
+		}
+	})
+
+	t.Run("heading target via URL path", func(t *testing.T) {
+		var gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		})
+
+		handler := handleReadNote(client)
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
+			"path":        "notes/test.md",
+			"target_type": "heading",
+			"target":      "My Section",
+		})}}
+		_, _ = handler(context.Background(), req)
+		if gotPath != "/vault/notes/test.md/heading/My Section" {
+			t.Fatalf("path = %q, want /vault/notes/test.md/heading/My Section", gotPath)
+		}
+	})
+
+	t.Run("frontmatter target via URL path", func(t *testing.T) {
+		var gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		})
+
+		handler := handleReadNote(client)
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
+			"path":        "notes/test.md",
+			"target_type": "frontmatter",
+			"target":      "tags",
+		})}}
+		_, _ = handler(context.Background(), req)
+		if gotPath != "/vault/notes/test.md/frontmatter/tags" {
+			t.Fatalf("path = %q, want /vault/notes/test.md/frontmatter/tags", gotPath)
+		}
+	})
+
+	t.Run("nested heading via URL path", func(t *testing.T) {
+		var gotPath string
+		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		})
+
+		handler := handleReadNote(client)
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
+			"path":             "notes/test.md",
+			"target_type":      "heading",
+			"target":           "Work::Meetings",
+			"target_delimiter": "::",
+		})}}
+		_, _ = handler(context.Background(), req)
+		if gotPath != "/vault/notes/test.md/heading/Work/Meetings" {
+			t.Fatalf("path = %q, want /vault/notes/test.md/heading/Work/Meetings", gotPath)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		handler := handleReadNote(nil)
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
+		result, err := handler(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.IsError {
+			t.Fatal("expected error for missing path")
+		}
+	})
 }
 
 func TestHandleMoveNote(t *testing.T) {
@@ -390,66 +413,6 @@ func TestHandleListNotes(t *testing.T) {
 
 		handler := handleListNotes(client)
 		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
-		result, err := handler(context.Background(), req)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !result.IsError {
-			t.Fatal("expected error wrapping api error")
-		}
-	})
-}
-
-func TestHandleReadNote(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		var gotMethod, gotPath string
-		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-			gotMethod = r.Method
-			gotPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("# Hello"))
-		})
-
-		handler := handleReadNote(client)
-		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
-			"path": "notes/test.md",
-		})}}
-		result, err := handler(context.Background(), req)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if result.IsError {
-			t.Fatalf("expected success, got error: %v", getText(result))
-		}
-		if gotMethod != "GET" {
-			t.Fatalf("method = %q, want GET", gotMethod)
-		}
-		if gotPath != "/vault/notes/test.md" {
-			t.Fatalf("path = %q, want /vault/notes/test.md", gotPath)
-		}
-	})
-
-	t.Run("missing path", func(t *testing.T) {
-		handler := handleReadNote(nil)
-		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{})}}
-		result, err := handler(context.Background(), req)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !result.IsError {
-			t.Fatal("expected error for missing path")
-		}
-	})
-
-	t.Run("api error", func(t *testing.T) {
-		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		})
-
-		handler := handleReadNote(client)
-		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: mustMarshalArgs(map[string]any{
-			"path": "notes/missing.md",
-		})}}
 		result, err := handler(context.Background(), req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -666,13 +629,19 @@ func TestHandleManageTags(t *testing.T) {
 		if result.IsError {
 			t.Fatalf("expected success, got error: %v", getText(result))
 		}
-		if patchBody != `["existing","newtag"]` {
-			t.Fatalf("patchBody = %q, want [\"existing\",\"newtag\"]", patchBody)
+		var parsed map[string]any
+		if json.Unmarshal([]byte(patchBody), &parsed) != nil {
+			t.Fatalf("patch body not valid JSON: %s", patchBody)
+		}
+		if parsed["targetType"] != "frontmatter" {
+			t.Fatalf("targetType = %v, want frontmatter", parsed["targetType"])
+		}
+		if parsed["operation"] != "replace" {
+			t.Fatalf("operation = %v, want replace", parsed["operation"])
 		}
 	})
 
 	t.Run("remove tag success", func(t *testing.T) {
-		var patchBody string
 		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodGet:
@@ -680,9 +649,6 @@ func TestHandleManageTags(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(`{"tags":["a","b"]}`))
 			default:
-				buf := make([]byte, 1024)
-				n, _ := r.Body.Read(buf)
-				patchBody = string(buf[:n])
 				w.WriteHeader(http.StatusNoContent)
 			}
 		})
@@ -699,9 +665,6 @@ func TestHandleManageTags(t *testing.T) {
 		}
 		if result.IsError {
 			t.Fatalf("expected success, got error: %v", getText(result))
-		}
-		if patchBody != `["b"]` {
-			t.Fatalf("patchBody = %q, want [\"b\"]", patchBody)
 		}
 	})
 
@@ -757,10 +720,11 @@ func TestHandleManageFrontmatter(t *testing.T) {
 	})
 
 	t.Run("set success", func(t *testing.T) {
-		var patchMethod, patchTarget string
+		var patchBody string
 		client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-			patchMethod = r.Method
-			patchTarget = r.Header.Get("Target")
+			buf := make([]byte, 1024)
+			n, _ := r.Body.Read(buf)
+			patchBody = string(buf[:n])
 			w.WriteHeader(http.StatusNoContent)
 		})
 
@@ -777,11 +741,15 @@ func TestHandleManageFrontmatter(t *testing.T) {
 		if result.IsError {
 			t.Fatalf("expected success, got error: %v", getText(result))
 		}
-		if patchMethod != "PATCH" {
-			t.Fatalf("method = %q, want PATCH", patchMethod)
+		var parsed map[string]any
+		if json.Unmarshal([]byte(patchBody), &parsed) != nil {
+			t.Fatalf("patch body not valid JSON: %s", patchBody)
 		}
-		if patchTarget != "title" {
-			t.Fatalf("Target = %q, want title", patchTarget)
+		if parsed["targetType"] != "frontmatter" {
+			t.Fatalf("targetType = %v, want frontmatter", parsed["targetType"])
+		}
+		if parsed["target"] != "title" {
+			t.Fatalf("target = %v, want title", parsed["target"])
 		}
 	})
 

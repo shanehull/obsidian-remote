@@ -111,26 +111,47 @@ mcp_call() {
   fi
 }
 
-echo "--- Creating note ---"
+echo "--- Creating note with sections ---"
 mcp_call 1 update_note \
-  '{"name":"update_note","arguments":{"path":"e2e-bridge.md","content":"# Bridge E2E\n\nCreated through MCP."}}'
+  '{"name":"update_note","arguments":{"path":"e2e-target.md","content":"## Details\n\nDetail content.\n\n## Notes\n\nNote content."}}'
 echo "PASS: update_note succeeded"
 
-echo "--- Reading note ---"
+echo "--- Reading heading via targeting ---"
 mcp_call 2 read_note \
-  '{"name":"read_note","arguments":{"path":"e2e-bridge.md"}}'
+  '{"name":"read_note","arguments":{"path":"e2e-target.md","target_type":"heading","target":"Details"}}'
 
-grep -q "Bridge E2E" "$SSE_LOG" && echo "PASS: content verified" \
-  || { echo "FAIL: content mismatch"; cat "$SSE_LOG"; kill "$SSE_PID" 2>/dev/null; exit 1; }
+grep -q "Detail content" "$SSE_LOG" && echo "PASS: heading target read" \
+  || { echo "FAIL: heading target mismatch"; cat "$SSE_LOG"; kill "$SSE_PID" 2>/dev/null; exit 1; }
 
-kill "$SSE_PID" 2>/dev/null || true
+echo "--- Reading frontmatter via targeting ---"
+mcp_call 3 manage_frontmatter \
+  '{"name":"manage_frontmatter","arguments":{"path":"e2e-target.md","operation":"set","jsonPayload":"{\"status\":\"done\"}"}}'
+echo "PASS: set frontmatter"
 
-# Cleanup the test note
-echo "--- Cleanup ---"
+mcp_call 4 read_note \
+  '{"name":"read_note","arguments":{"path":"e2e-target.md","target_type":"frontmatter","target":"status"}}'
+
+grep -q "done" "$SSE_LOG" && echo "PASS: frontmatter target read" \
+  || { echo "FAIL: frontmatter target mismatch"; cat "$SSE_LOG"; kill "$SSE_PID" 2>/dev/null; exit 1; }
+
+echo "--- Appending to heading ---"
+mcp_call 5 update_note \
+  '{"name":"update_note","arguments":{"path":"e2e-target.md","target_type":"heading","target":"Notes","operation":"append","content":"\n- Extra item"}}'
+echo "PASS: append to heading"
+
+mcp_call 6 read_note \
+  '{"name":"read_note","arguments":{"path":"e2e-target.md","target_type":"heading","target":"Notes"}}'
+
+grep -q "Extra item" "$SSE_LOG" && echo "PASS: appended content visible" \
+  || { echo "FAIL: append not visible"; cat "$SSE_LOG"; kill "$SSE_PID" 2>/dev/null; exit 1; }
+
+# Cleanup targeting test note
 docker compose exec -T obsidian curl -sf -X DELETE \
   -H "Authorization: Bearer bridge-key" \
-  http://127.0.0.1:27124/vault/e2e-bridge.md > /dev/null || true
-echo "PASS: cleanup done"
+  http://127.0.0.1:27124/vault/e2e-target.md > /dev/null || true
+echo "PASS: targeting cleanup done"
+
+kill "$SSE_PID" 2>/dev/null || true
 
 echo ""
 echo "=== All e2e tests passed ==="
