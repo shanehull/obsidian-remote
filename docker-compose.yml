@@ -12,7 +12,6 @@ services:
       - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
       - OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_URL:-}
       - OAUTH_ALLOWED_EMAIL=${OAUTH_ALLOWED_EMAIL:-}
-      - PUBLIC_HOST=${PUBLIC_HOST:-}
     ports:
       - 4000:4000 # MCP Server (Streamable HTTP + SSE)
     restart: unless-stopped
