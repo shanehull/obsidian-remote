@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/shanehull/obsidian-remote/compare/v1.2.0...v1.2.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* drop unused PUBLIC_HOST config ([#49](https://github.com/shanehull/obsidian-remote/issues/49)) ([0b01167](https://github.com/shanehull/obsidian-remote/commit/0b011671e17e5f88cf9d5151864d5cd06662a05c))
+* terminate OAuth redirect at proxy to resolve RFC 9207 issuer mismatch ([#45](https://github.com/shanehull/obsidian-remote/issues/45)) ([51a6ef8](https://github.com/shanehull/obsidian-remote/commit/51a6ef87a53d1dbbcb5266354c66d43e1762d1b3))
+
 ## [1.2.0](https://github.com/shanehull/obsidian-remote/compare/v1.1.1...v1.2.0) (2026-08-11)
 
 
