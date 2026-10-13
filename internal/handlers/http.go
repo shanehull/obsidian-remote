@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -118,9 +122,142 @@ func HandleAuthorizeProxy(cfg *config.Config) http.HandlerFunc {
 		if params.Get("scope") == "" {
 			params.Set("scope", "openid email profile")
 		}
+
+		// Route the response through our own callback and stash the client's
+		// redirect_uri so the upstream IdP never redirects to the client
+		// directly. The IdP stamps its own iss there, which the MCP client
+		// rejects as an issuer mismatch (RFC 9207).
+		state, err := encodeState(cfg, params.Get("redirect_uri"), params.Get("state"))
+		if err != nil {
+			http.Error(w, "missing or invalid redirect_uri", http.StatusBadRequest)
+			return
+		}
+
+		params.Set("redirect_uri", callbackURL(cfg, r))
+		params.Set("state", state)
+
 		target := cfg.OAuthAuthorizeURL + "?" + params.Encode()
 		http.Redirect(w, r, target, http.StatusFound)
 	}
+}
+
+func HandleAuthorizeCallback(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+
+		redirectURI, clientState, err := decodeState(cfg, params.Get("state"))
+		if err != nil {
+			slog.Warn("authorize callback: invalid state", "error", err)
+			http.Error(w, "Invalid or expired OAuth state", http.StatusBadRequest)
+			return
+		}
+
+		target, err := url.Parse(redirectURI)
+		if err != nil {
+			http.Error(w, "Invalid redirect_uri", http.StatusBadRequest)
+			return
+		}
+
+		query := target.Query()
+		if code := params.Get("code"); code != "" {
+			query.Set("code", code)
+		} else {
+			if e := params.Get("error"); e != "" {
+				query.Set("error", e)
+			} else {
+				query.Set("error", "access_denied")
+			}
+			if desc := params.Get("error_description"); desc != "" {
+				query.Set("error_description", desc)
+			}
+		}
+		if clientState != "" {
+			query.Set("state", clientState)
+		}
+		target.RawQuery = query.Encode()
+
+		http.Redirect(w, r, target.String(), http.StatusFound)
+	}
+}
+
+func callbackURL(cfg *config.Config, r *http.Request) string {
+	if cfg.OAuthCallbackURL != "" {
+		return cfg.OAuthCallbackURL
+	}
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s/oauth/callback", scheme, r.Host)
+}
+
+type oauthState struct {
+	RedirectURI string `json:"r"`
+	ClientState string `json:"s"`
+}
+
+// State is signed when a client secret is available so the callback cannot be
+// abused as an open redirect. Without one, a per-process key keeps the proxy
+// working in unauthenticated configurations.
+var stateSigningKey = randomSigningKey()
+
+func randomSigningKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		slog.Error("failed to generate state signing key", "error", err)
+	}
+	return key
+}
+
+func encodeState(cfg *config.Config, redirectURI, clientState string) (string, error) {
+	if redirectURI == "" {
+		return "", fmt.Errorf("missing redirect_uri")
+	}
+
+	payload, err := json.Marshal(oauthState{RedirectURI: redirectURI, ClientState: clientState})
+	if err != nil {
+		return "", err
+	}
+
+	encoded := base64.RawURLEncoding.EncodeToString(payload)
+	return encoded + "." + signState(cfg, encoded), nil
+}
+
+func decodeState(cfg *config.Config, state string) (string, string, error) {
+	encoded, signature, ok := strings.Cut(state, ".")
+	if !ok {
+		return "", "", fmt.Errorf("malformed state")
+	}
+
+	expected := signState(cfg, encoded)
+	if !hmac.Equal([]byte(expected), []byte(signature)) {
+		return "", "", fmt.Errorf("invalid state signature")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", "", err
+	}
+
+	var decoded oauthState
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return "", "", err
+	}
+	if decoded.RedirectURI == "" {
+		return "", "", fmt.Errorf("missing redirect_uri")
+	}
+	return decoded.RedirectURI, decoded.ClientState, nil
+}
+
+func signState(cfg *config.Config, encoded string) string {
+	key := stateSigningKey
+	if cfg.OAuthClientSecret != "" {
+		key = []byte(cfg.OAuthClientSecret)
+	}
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(encoded))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func HandleTokenProxy(cfg *config.Config) http.HandlerFunc {
@@ -142,6 +279,11 @@ func HandleTokenProxy(cfg *config.Config) http.HandlerFunc {
 		form.Set("client_id", cfg.OAuthAudience)
 		if cfg.OAuthClientSecret != "" {
 			form.Set("client_secret", cfg.OAuthClientSecret)
+		}
+		// The code was issued against our callback, so the exchange must
+		// present the same redirect_uri rather than the client's.
+		if form.Get("grant_type") == "authorization_code" {
+			form.Set("redirect_uri", callbackURL(cfg, r))
 		}
 
 		resp, err := http.PostForm(cfg.OAuthTokenURL, form)

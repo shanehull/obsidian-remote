@@ -10,6 +10,7 @@ services:
       - OAUTH_JWKS_URL=${OAUTH_JWKS_URL:-https://www.googleapis.com/oauth2/v3/certs}
       - OAUTH_AUDIENCE=${OAUTH_AUDIENCE:-}
       - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      - OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_URL:-}
       - OAUTH_ALLOWED_EMAIL=${OAUTH_ALLOWED_EMAIL:-}
       - PUBLIC_HOST=${PUBLIC_HOST:-}
     ports:
