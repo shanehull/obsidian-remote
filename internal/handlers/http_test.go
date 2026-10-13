@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ func testConfig() *config.Config {
 		OAuthTokenURL:     "https://oauth2.googleapis.com/token",
 		OAuthAudience:     "test-client-id",
 		OAuthClientSecret: "test-secret",
+		OAuthCallbackURL:  "https://bridge.example.com/oauth/callback",
 	}
 }
 
@@ -171,6 +173,182 @@ func TestHandleAuthorizeProxy_PreservesScope(t *testing.T) {
 	loc := rec.Header().Get("Location")
 	if !strings.Contains(loc, "scope=custom") {
 		t.Errorf("expected custom scope preserved, got %s", loc)
+	}
+}
+
+func TestHandleAuthorizeProxy_RewritesRedirectURI(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&state=client-state&code_challenge=abc&code_challenge_method=S256", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("invalid location: %v", err)
+	}
+
+	if got := loc.Query().Get("redirect_uri"); got != cfg.OAuthCallbackURL {
+		t.Errorf("expected redirect_uri=%s, got %s", cfg.OAuthCallbackURL, got)
+	}
+	if loc.Query().Get("state") == "client-state" {
+		t.Error("expected client state to be wrapped, not passed through")
+	}
+	if loc.Query().Get("code_challenge") != "abc" {
+		t.Error("expected PKCE challenge to be preserved")
+	}
+}
+
+func TestHandleAuthorizeProxy_RequiresRedirectURI(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	req := httptest.NewRequest("GET", "/authorize?client_id=x", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleAuthorizeCallback_RoundTrip(t *testing.T) {
+	cfg := testConfig()
+	clientRedirect := "http://localhost:8080/callback"
+
+	authReq := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri="+url.QueryEscape(clientRedirect)+"&state=client-state", nil)
+	authRec := httptest.NewRecorder()
+	handlers.HandleAuthorizeProxy(cfg).ServeHTTP(authRec, authReq)
+
+	wrapped, err := url.Parse(authRec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("invalid location: %v", err)
+	}
+
+	cbReq := httptest.NewRequest("GET", "/oauth/callback?code=auth-code&state="+url.QueryEscape(wrapped.Query().Get("state")), nil)
+	cbRec := httptest.NewRecorder()
+	handlers.HandleAuthorizeCallback(cfg).ServeHTTP(cbRec, cbReq)
+
+	if cbRec.Code != http.StatusFound {
+		t.Fatalf("expected 302, got %d", cbRec.Code)
+	}
+
+	loc, err := url.Parse(cbRec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("invalid location: %v", err)
+	}
+	if loc.Scheme != "http" || loc.Host != "localhost:8080" || loc.Path != "/callback" {
+		t.Errorf("expected redirect to %s, got %s", clientRedirect, loc)
+	}
+	if loc.Query().Get("code") != "auth-code" {
+		t.Errorf("expected code forwarded, got %s", loc.Query().Get("code"))
+	}
+	if loc.Query().Get("state") != "client-state" {
+		t.Errorf("expected client state restored, got %s", loc.Query().Get("state"))
+	}
+	if loc.Query().Has("iss") {
+		t.Error("iss must not be forwarded to the client")
+	}
+}
+
+func TestHandleAuthorizeCallback_ErrorPassthrough(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeCallback(cfg)
+
+	authReq := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri=http%3A%2F%2Flocalhost%2Fcb&state=s1", nil)
+	authRec := httptest.NewRecorder()
+	handlers.HandleAuthorizeProxy(cfg).ServeHTTP(authRec, authReq)
+	wrapped, _ := url.Parse(authRec.Header().Get("Location"))
+
+	cbReq := httptest.NewRequest("GET", "/oauth/callback?error=access_denied&error_description=nope&state="+url.QueryEscape(wrapped.Query().Get("state")), nil)
+	cbRec := httptest.NewRecorder()
+	h.ServeHTTP(cbRec, cbReq)
+
+	loc, _ := url.Parse(cbRec.Header().Get("Location"))
+	if loc.Query().Get("error") != "access_denied" {
+		t.Errorf("expected error forwarded, got %s", loc.Query().Get("error"))
+	}
+	if loc.Query().Get("code") != "" {
+		t.Error("expected no code on error response")
+	}
+	if loc.Query().Get("state") != "s1" {
+		t.Errorf("expected state restored, got %s", loc.Query().Get("state"))
+	}
+}
+
+func TestHandleAuthorizeCallback_RejectsTamperedState(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeCallback(cfg)
+
+	req := httptest.NewRequest("GET", "/oauth/callback?code=x&state=not-a-valid-state", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleTokenProxy_RewritesRedirectURI(t *testing.T) {
+	var received url.Values
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		received = r.Form
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token"}`))
+	}))
+	defer upstream.Close()
+
+	cfg := testConfig()
+	cfg.OAuthTokenURL = upstream.URL
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {"abc"},
+		"redirect_uri":  {"http://localhost:8080/callback"},
+		"code_verifier": {"verifier"},
+	}
+	req := httptest.NewRequest("POST", "/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handlers.HandleTokenProxy(cfg).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := received.Get("redirect_uri"); got != cfg.OAuthCallbackURL {
+		t.Errorf("expected redirect_uri=%s, got %s", cfg.OAuthCallbackURL, got)
+	}
+	if got := received.Get("client_secret"); got != cfg.OAuthClientSecret {
+		t.Errorf("expected client_secret=%s, got %s", cfg.OAuthClientSecret, got)
+	}
+	if got := received.Get("code_verifier"); got != "verifier" {
+		t.Errorf("expected code_verifier preserved, got %s", got)
+	}
+}
+
+func TestHandleTokenProxy_RefreshGrantKeepsRedirectURI(t *testing.T) {
+	var received url.Values
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		received = r.Form
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token"}`))
+	}))
+	defer upstream.Close()
+
+	cfg := testConfig()
+	cfg.OAuthTokenURL = upstream.URL
+
+	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {"rt"}}
+	req := httptest.NewRequest("POST", "/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handlers.HandleTokenProxy(cfg).ServeHTTP(rec, req)
+
+	if got := received.Get("redirect_uri"); got != "" {
+		t.Errorf("expected no redirect_uri on refresh, got %s", got)
 	}
 }
 

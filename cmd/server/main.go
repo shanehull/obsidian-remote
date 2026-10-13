@@ -94,6 +94,7 @@ func registerHTTPHandlers(mux *http.ServeMux, cfg *config.Config, sse *mcp.SSEHa
 
 	// OAuth proxies (inject scope and client_secret so clients don't need them)
 	mux.HandleFunc("/authorize", handlers.HandleAuthorizeProxy(cfg))
+	mux.HandleFunc("/oauth/callback", handlers.HandleAuthorizeCallback(cfg))
 	mux.HandleFunc("/token", handlers.HandleTokenProxy(cfg))
 
 	// Dynamic Client Config

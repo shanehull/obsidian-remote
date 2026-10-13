@@ -18,6 +18,7 @@ func TestLoadDefaults(t *testing.T) {
 	_ = os.Unsetenv("PUBLIC_HOST")
 	_ = os.Unsetenv("OAUTH_AUDIENCE")
 	_ = os.Unsetenv("OAUTH_CLIENT_SECRET")
+	_ = os.Unsetenv("OAUTH_CALLBACK_URL")
 	_ = os.Unsetenv("OAUTH_ALLOWED_EMAIL")
 
 	cfg := config.Load()
@@ -42,6 +43,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.PublicHost != "" {
 		t.Errorf("expected empty PublicHost, got %s", cfg.PublicHost)
+	}
+	if cfg.OAuthCallbackURL != "" {
+		t.Errorf("expected empty OAuthCallbackURL, got %s", cfg.OAuthCallbackURL)
 	}
 }
 
@@ -81,7 +85,23 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.PublicHost != "https://example.com" {
 		t.Errorf("expected PublicHost=https://example.com, got %s", cfg.PublicHost)
 	}
+	if cfg.OAuthCallbackURL != "https://example.com/oauth/callback" {
+		t.Errorf("expected OAuthCallbackURL derived from PublicHost, got %s", cfg.OAuthCallbackURL)
+	}
 	if cfg.AllowedEmail != "admin@example.com" {
 		t.Errorf("expected AllowedEmail=admin@example.com, got %s", cfg.AllowedEmail)
+	}
+}
+
+func TestLoadCallbackURLOverride(t *testing.T) {
+	_ = os.Setenv("PUBLIC_HOST", "https://example.com")
+	_ = os.Setenv("OAUTH_CALLBACK_URL", "https://auth.example.com/callback")
+	defer func() { _ = os.Unsetenv("PUBLIC_HOST") }()
+	defer func() { _ = os.Unsetenv("OAUTH_CALLBACK_URL") }()
+
+	cfg := config.Load()
+
+	if cfg.OAuthCallbackURL != "https://auth.example.com/callback" {
+		t.Errorf("expected explicit OAuthCallbackURL, got %s", cfg.OAuthCallbackURL)
 	}
 }

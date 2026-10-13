@@ -10,14 +10,14 @@ A high-performance MCP server for your Obsidian vault, written in Go. This serve
 - **RFC 9728 Compliant:** Implements OAuth-protected resource discovery.
 - **Dual Transport:** Supports both Streamable HTTP and SSE transports.
 - **Secure:** Integrated JWT and OAuth access token validation with email-based access control.
-- **Server-Side Token Proxy:** Clients never need the OAuth client secret — the server injects it during the token exchange.
+- **Server-Side OAuth Proxy:** Clients never need the OAuth client secret, and the server terminates the identity provider redirect so the authorization response carries the expected issuer.
 - **Google OAuth:** JWT validation via JWKS with opaque access token fallback via Google's tokeninfo endpoint.
 
 ## Prerequisites
 
 - A container runtime (Docker, Podman, etc.). Docker Compose is used in the examples below.
 - A public URL (HTTPS) if accessing from outside your local network.
-- (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Desktop app** type — this allows `http://localhost` redirect URIs on any port, which is required by MCP clients (Claude Code, OpenCode, etc.). Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
+- (Optional) A Google OAuth client ID and secret for authentication. In Google Cloud Console, create an OAuth client with the **Web application** type and register `https://obsidian.yourdomain.com/oauth/callback` as an authorized redirect URI. The server terminates the identity provider redirect at this path, then returns the response to the MCP client itself, so the client never sees the provider's RFC 9207 `iss` value (which it would reject as an issuer mismatch). Other OIDC providers are supported for JWT validation only. If OAuth is not configured, the server runs without authentication.
 
 ## Resource Requirements
 
@@ -42,7 +42,7 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
    Edit `.env` with your configuration:
 
    **Server:**
-   - `PUBLIC_HOST`: The external URL of this server (e.g., `https://obsidian.yourdomain.com`).
+   - `PUBLIC_HOST`: The external URL of this server (e.g., `https://obsidian.yourdomain.com`). Also used to derive the OAuth callback URL.
 
    **OAuth (Optional):**
    - `OAUTH_ISSUER`: Your OIDC issuer (e.g., `https://accounts.google.com`).
@@ -50,7 +50,8 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
    - `OAUTH_AUTHORIZE_URL`: The provider's authorization endpoint (e.g., `https://accounts.google.com/o/oauth2/v2/auth`).
    - `OAUTH_TOKEN_URL`: The provider's token endpoint (e.g., `https://oauth2.googleapis.com/token`).
    - `OAUTH_AUDIENCE`: Your OAuth Client ID. If not set, authentication is disabled.
-   - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret (used server-side for the token exchange proxy).
+   - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret. Used server-side for the token exchange proxy and to sign the authorization state.
+   - `OAUTH_CALLBACK_URL`: The redirect URI registered with your provider. Defaults to `<PUBLIC_HOST>/oauth/callback`; if neither value is set, it is derived from the incoming request host.
    - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault. If not set, any authenticated user is allowed.
 
    **Vault Sync (optional):**
@@ -120,6 +121,7 @@ Clients that support SSE can connect to `/sse`:
 | `/sse`                                    | GET             | SSE transport                                |
 | `/message`                                | POST            | SSE message endpoint                         |
 | `/authorize`                              | GET             | OAuth authorize proxy (injects scope)        |
+| `/oauth/callback`                         | GET             | Identity provider redirect target            |
 | `/token`                                  | POST            | Token exchange proxy (injects client secret) |
 | `/config`                                 | GET             | Dynamic client config (issuer + client ID)   |
 | `/.well-known/oauth-protected-resource`   | GET             | RFC 9728 resource metadata                   |
