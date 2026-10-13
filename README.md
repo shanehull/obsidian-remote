@@ -41,9 +41,6 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
 
    Edit `.env` with your configuration:
 
-   **Server:**
-   - `PUBLIC_HOST`: The external URL of this server (e.g., `https://obsidian.yourdomain.com`). Also used to derive the OAuth callback URL.
-
    **OAuth (Optional):**
    - `OAUTH_ISSUER`: Your OIDC issuer (e.g., `https://accounts.google.com`).
    - `OAUTH_JWKS_URL`: The URL to fetch public signing keys (e.g., `https://www.googleapis.com/oauth2/v3/certs`).
@@ -51,7 +48,7 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
    - `OAUTH_TOKEN_URL`: The provider's token endpoint (e.g., `https://oauth2.googleapis.com/token`).
    - `OAUTH_AUDIENCE`: Your OAuth Client ID. If not set, authentication is disabled.
    - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret. Used server-side for the token exchange proxy and to sign the authorization state.
-   - `OAUTH_CALLBACK_URL`: The redirect URI registered with your provider. Defaults to `<PUBLIC_HOST>/oauth/callback`; if neither value is set, it is derived from the incoming request host.
+   - `OAUTH_CALLBACK_URL`: The absolute redirect URI registered with your provider (e.g., `https://obsidian.yourdomain.com/oauth/callback`). Defaults to the incoming request origin, `<scheme>://<host>/oauth/callback`.
    - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault. If not set, any authenticated user is allowed.
 
    **Vault Sync (optional):**
