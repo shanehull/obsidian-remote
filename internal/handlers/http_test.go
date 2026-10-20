@@ -162,6 +162,46 @@ func TestHandleAuthorizeProxy_InjectScope(t *testing.T) {
 	}
 }
 
+func TestHandleAuthorizeProxy_RequestsOfflineAccess(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri=http://localhost", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("invalid location: %v", err)
+	}
+	if got := loc.Query().Get("access_type"); got != "offline" {
+		t.Errorf("expected access_type=offline, got %q", got)
+	}
+	if got := loc.Query().Get("prompt"); got != "consent" {
+		t.Errorf("expected prompt=consent, got %q", got)
+	}
+}
+
+func TestHandleAuthorizeProxy_PreservesOfflineAccessParams(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri=http://localhost&access_type=online&prompt=none", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("invalid location: %v", err)
+	}
+	if got := loc.Query().Get("access_type"); got != "online" {
+		t.Errorf("expected access_type preserved, got %q", got)
+	}
+	if got := loc.Query().Get("prompt"); got != "none" {
+		t.Errorf("expected prompt preserved, got %q", got)
+	}
+}
+
 func TestHandleAuthorizeProxy_PreservesScope(t *testing.T) {
 	cfg := testConfig()
 	h := handlers.HandleAuthorizeProxy(cfg)

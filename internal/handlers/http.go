@@ -122,6 +122,15 @@ func HandleAuthorizeProxy(cfg *config.Config) http.HandlerFunc {
 		if params.Get("scope") == "" {
 			params.Set("scope", "openid email profile")
 		}
+		// Google issues a refresh token only for offline access, and only repeats
+		// it when consent is explicit. Without both, a login cannot outlive its
+		// access token.
+		if params.Get("access_type") == "" {
+			params.Set("access_type", "offline")
+		}
+		if params.Get("prompt") == "" {
+			params.Set("prompt", "consent")
+		}
 
 		// Route the response through our own callback and stash the client's
 		// redirect_uri so the upstream IdP never redirects to the client
