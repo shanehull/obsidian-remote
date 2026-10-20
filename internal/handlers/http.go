@@ -116,6 +116,29 @@ func HandleRegistration(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
+// redirectAllowed reports whether an authorization code may be delivered to raw.
+// MCP clients use loopback redirects; every other URI must be listed in
+// OAUTH_REDIRECT_URIS.
+func redirectAllowed(cfg *config.Config, raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Fragment != "" {
+		return false
+	}
+	for _, allowed := range cfg.OAuthRedirectURIs {
+		if raw == allowed {
+			return true
+		}
+	}
+	if u.Scheme != "http" {
+		return false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
+
 func HandleAuthorizeProxy(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
@@ -136,7 +159,12 @@ func HandleAuthorizeProxy(cfg *config.Config) http.HandlerFunc {
 		// redirect_uri so the upstream IdP never redirects to the client
 		// directly. The IdP stamps its own iss there, which the MCP client
 		// rejects as an issuer mismatch (RFC 9207).
-		state, err := encodeState(cfg, params.Get("redirect_uri"), params.Get("state"))
+		clientRedirect := params.Get("redirect_uri")
+		if !redirectAllowed(cfg, clientRedirect) {
+			http.Error(w, "missing or invalid redirect_uri", http.StatusBadRequest)
+			return
+		}
+		state, err := encodeState(cfg, clientRedirect, params.Get("state"))
 		if err != nil {
 			http.Error(w, "missing or invalid redirect_uri", http.StatusBadRequest)
 			return

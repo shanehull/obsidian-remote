@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -15,7 +16,21 @@ type Config struct {
 	OAuthAudience     string
 	OAuthClientSecret string
 	OAuthCallbackURL  string
+	OAuthRedirectURIs []string
 	AllowedEmail      string
+}
+
+func parseList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var values []string
+	for _, v := range strings.Split(raw, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			values = append(values, v)
+		}
+	}
+	return values
 }
 
 func getEnv(key, fallback string) string {
@@ -38,7 +53,8 @@ func Load() *Config {
 		OAuthClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
 		// Absolute URL registered with the provider. When unset, the handler
 		// derives it from the request origin.
-		OAuthCallbackURL: os.Getenv("OAUTH_CALLBACK_URL"),
-		AllowedEmail:     os.Getenv("OAUTH_ALLOWED_EMAIL"),
+		OAuthCallbackURL:  os.Getenv("OAUTH_CALLBACK_URL"),
+		OAuthRedirectURIs: parseList(os.Getenv("OAUTH_REDIRECT_URIS")),
+		AllowedEmail:      os.Getenv("OAUTH_ALLOWED_EMAIL"),
 	}
 }

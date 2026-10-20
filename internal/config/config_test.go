@@ -19,6 +19,7 @@ func TestLoadDefaults(t *testing.T) {
 	_ = os.Unsetenv("OAUTH_CLIENT_SECRET")
 	_ = os.Unsetenv("OAUTH_CALLBACK_URL")
 	_ = os.Unsetenv("OAUTH_ALLOWED_EMAIL")
+	_ = os.Unsetenv("OAUTH_REDIRECT_URIS")
 
 	cfg := config.Load()
 
@@ -52,12 +53,14 @@ func TestLoadOverrides(t *testing.T) {
 	_ = os.Setenv("OAUTH_AUDIENCE", "test-client-id")
 	_ = os.Setenv("OAUTH_CLIENT_SECRET", "test-secret")
 	_ = os.Setenv("OAUTH_ALLOWED_EMAIL", "admin@example.com")
+	_ = os.Setenv("OAUTH_REDIRECT_URIS", "vscode://shanehull.obsidian/callback,https://app.example.com/cb")
 	defer func() { _ = os.Unsetenv("VAULT_PATH") }()
 	defer func() { _ = os.Unsetenv("OBSIDIAN_URL") }()
 	defer func() { _ = os.Unsetenv("OBSIDIAN_KEY") }()
 	defer func() { _ = os.Unsetenv("OAUTH_AUDIENCE") }()
 	defer func() { _ = os.Unsetenv("OAUTH_CLIENT_SECRET") }()
 	defer func() { _ = os.Unsetenv("OAUTH_ALLOWED_EMAIL") }()
+	defer func() { _ = os.Unsetenv("OAUTH_REDIRECT_URIS") }()
 
 	cfg := config.Load()
 
@@ -78,6 +81,12 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.AllowedEmail != "admin@example.com" {
 		t.Errorf("expected AllowedEmail=admin@example.com, got %s", cfg.AllowedEmail)
+	}
+	if len(cfg.OAuthRedirectURIs) != 2 {
+		t.Fatalf("expected 2 redirect URIs, got %d", len(cfg.OAuthRedirectURIs))
+	}
+	if cfg.OAuthRedirectURIs[0] != "vscode://shanehull.obsidian/callback" {
+		t.Errorf("expected first redirect URI from env, got %s", cfg.OAuthRedirectURIs[0])
 	}
 }
 
