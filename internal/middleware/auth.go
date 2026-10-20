@@ -52,6 +52,7 @@ func Auth(cfg *config.Config, jwks *keyfunc.JWKS) func(http.Handler) http.Handle
 			email, err := validateAccessToken(tokenString, cfg.OAuthAudience)
 			if err != nil {
 				slog.Warn("invalid token", "error", err, "remote", r.RemoteAddr)
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 				http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
 				return
 			}
