@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/shanehull/obsidian-remote/compare/v1.2.1...v1.2.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* reject unlisted authorize redirect URIs ([#52](https://github.com/shanehull/obsidian-remote/issues/52)) ([a37d3fa](https://github.com/shanehull/obsidian-remote/commit/a37d3fa6748ab0330d9ddc8be09b5c84e4a83559))
+* request offline access so Google issues refresh tokens ([#50](https://github.com/shanehull/obsidian-remote/issues/50)) ([c8e1cc8](https://github.com/shanehull/obsidian-remote/commit/c8e1cc81e733493412c35f5b6b4f13b9e9e87b15))
+
 ## [1.2.1](https://github.com/shanehull/obsidian-remote/compare/v1.2.0...v1.2.1) (2026-10-13)
 
 
