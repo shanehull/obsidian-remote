@@ -240,6 +240,59 @@ func TestHandleAuthorizeProxy_RewritesRedirectURI(t *testing.T) {
 	}
 }
 
+func TestHandleAuthorizeProxy_AllowsLoopbackRedirect(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	for _, uri := range []string{
+		"http://localhost:8080/cb",
+		"http://127.0.0.1:62342/callback",
+		"http://[::1]:9000/cb",
+	} {
+		req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri="+url.QueryEscape(uri), nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusFound {
+			t.Errorf("expected 302 for %s, got %d", uri, rec.Code)
+		}
+	}
+}
+
+func TestHandleAuthorizeProxy_RejectsUnlistedRedirect(t *testing.T) {
+	cfg := testConfig()
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	for _, uri := range []string{
+		"https://evil.example/cb",
+		"http://localhost.evil.example/cb",
+		"https://127.0.0.1:8443/cb",
+		"http://localhost/cb#fragment",
+	} {
+		req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri="+url.QueryEscape(uri), nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for %s, got %d", uri, rec.Code)
+		}
+	}
+}
+
+func TestHandleAuthorizeProxy_AllowsConfiguredRedirect(t *testing.T) {
+	cfg := testConfig()
+	cfg.OAuthRedirectURIs = []string{"vscode://shanehull.obsidian/callback"}
+	h := handlers.HandleAuthorizeProxy(cfg)
+
+	req := httptest.NewRequest("GET", "/authorize?client_id=x&redirect_uri="+url.QueryEscape("vscode://shanehull.obsidian/callback"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Errorf("expected 302, got %d", rec.Code)
+	}
+}
+
 func TestHandleAuthorizeProxy_RequiresRedirectURI(t *testing.T) {
 	cfg := testConfig()
 	h := handlers.HandleAuthorizeProxy(cfg)

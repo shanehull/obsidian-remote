@@ -50,6 +50,7 @@ Disk usage includes the Docker image (~2 GB base) plus vault storage. Typical ru
    - `OAUTH_CLIENT_SECRET`: Your OAuth Client Secret. Used server-side for the token exchange proxy and to sign the authorization state.
    - `OAUTH_CALLBACK_URL`: The absolute redirect URI registered with your provider (e.g., `https://obsidian.yourdomain.com/oauth/callback`). Defaults to the incoming request origin, `<scheme>://<host>/oauth/callback`.
    - `OAUTH_ALLOWED_EMAIL`: The specific email address authorized to access the vault. If not set, any authenticated user is allowed.
+   - `OAUTH_REDIRECT_URIS`: Extra client redirect URIs, comma-separated. Loopback redirects (`http://localhost`, `http://127.0.0.1`, `http://[::1]`) are always allowed; anything else must be listed here.
 
    **Vault Sync (optional):**
    - `GIT_REPO_URL`: Git repository URL for vault sync (e.g., `git@github.com:user/vault.git`).
